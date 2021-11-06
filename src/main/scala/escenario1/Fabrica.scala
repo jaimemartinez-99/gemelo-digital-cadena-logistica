@@ -90,29 +90,29 @@ object Fabrica {
     override def receive: Receive = {
       case ResetearFabrica (localizacion) =>
         log.info(s"[Fabrica] Iniciada en ${localizacion.name}")
-        context.become(iniciada(Seq[Paquete](), Seq[Paquete](),localizacion))
+        context.become(iniciada(Seq[Paquete](), Seq[Int](), localizacion))
     }
 
-    def iniciada(listaPaquetes: Seq[Paquete], listaTodosPaquetes: Seq[Paquete], localizacion: Localizacion): Receive = {
+    def iniciada(listaPaquetes: Seq[Paquete], listaTodosIdPaquetes: Seq[Int], localizacion: Localizacion): Receive = {
       case CrearPaquete =>
-        val paquete_id = listaTodosPaquetes.size + 1
+        val paquete_id = listaTodosIdPaquetes.size + 1
         val cliente = clienteAleatorio()  // Cliente aleatorio
         val localizacionDestino = localizacionDestinoAleatorio(localizacion) // Destino final aleatorio
         val prioridad = prioridadAleatoria() // Prioridad aleatoria
         val paquete = Paquete(paquete_id, prioridad, cliente, localizacionDestino)
         log.info(s"[Fabrica] Evento: ITEM GENERADO, Paquete(id: ${paquete.id}, prioridad: ${paquete.prioridad}, cliente: ${paquete.cliente.name}, destino final: ${paquete.localizacionDestino.name}) generado")
-        val nuevaListaTodosPaquetes = listaTodosPaquetes :+ paquete // almacenar solo los id
+        val nuevaListaTodosIdPaquetes = listaTodosIdPaquetes :+ paquete.id
         val nuevaListaPaquetes = listaPaquetes :+ paquete
         schedule.cancel()
         schedule = intervaloTiempoGenerarPaquete()
-        context.become(iniciada(nuevaListaPaquetes, nuevaListaTodosPaquetes,localizacion))
+        context.become(iniciada(nuevaListaPaquetes, nuevaListaTodosIdPaquetes,localizacion))
 
       case SalidaPaquetes (capacidadTren, localizacionDestino) =>
         val listaSalidaPaquetes = take(listaPaquetes, capacidadTren, localizacionDestino)
         val listaPaquetesRestantes = listaPaquetes.diff(listaSalidaPaquetes)
         log.info(s"[Fabrica] ${listaPaquetesRestantes.map(p => p.id)} restantes")
         sender() ! RecibirPaquetes(listaSalidaPaquetes)
-        context.become(iniciada(listaPaquetesRestantes, listaTodosPaquetes,localizacion))
+        context.become(iniciada(listaPaquetesRestantes, listaTodosIdPaquetes,localizacion))
     }
   }
 

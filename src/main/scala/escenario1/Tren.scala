@@ -15,7 +15,7 @@ object Tren {
    * Tren
    */
 
-  import system.dispatcher//TODO ES NECESARIO ESTO??
+  import system.dispatcher //TODO ES NECESARIO ESTO??
 
   object Tren {
     case class  IniciarTren(id: Int, capacidad: Int, localizacion: Localizacion)
@@ -29,13 +29,6 @@ object Tren {
 
   class Tren extends Actor with ActorLogging {
     import Tren._
-
-    var scheduleRecibirPaquetes: Cancellable = _
-    var scheduleCargarDescargarPaquetes: Cancellable = _
-    var scheduleViaje: Cancellable = _
-    var scheduleEsperaDescargaPaquetes: Cancellable = _
-    var scheduleEsperaInicioViaje: Cancellable = _
-    var scheduleEntregaAlmacen: Cancellable = _
 
     var scheduleTren: Cancellable = _
 
@@ -79,60 +72,6 @@ object Tren {
           context.system.scheduler.scheduleOnce(rnd.seconds){
             self ! EntregarAlmacen
           }
-      }
-    }
-
-    def intervaloTiempoRecibirPaquetes(tren_id: Int, capacidad: Int, localizacionDestino: Localizacion): Cancellable = {
-      val r = new Random()
-      val rnd = 30 + r.nextInt(10)
-      log.info(s"   [Tren $tren_id] random number recibir $rnd")
-      context.system.scheduler.scheduleOnce(rnd.seconds){
-        fabrica ! SalidaPaquetes(capacidad, localizacionDestino)
-      }
-    }
-
-    def intervaloTiempoCargarDescargarPaquetes(tren_id: Int): Cancellable = {
-      val r = new Random()
-      val rnd = 5 + r.nextInt(5)
-      log.info(s"   [Tren $tren_id] random number cargar/descargar $rnd")
-      context.system.scheduler.scheduleOnce(rnd.seconds){
-        self ! FinCargaDescarga
-      }
-    }
-
-    def intervaloTiempoViaje(tren_id: Int): Cancellable = {
-      val r = new Random()
-      val rnd = 30 + r.nextInt(10)
-      log.info(s"   [Tren $tren_id] random number viaje $rnd")
-      context.system.scheduler.scheduleOnce(rnd.seconds){
-        self ! FinViaje
-      }
-    }
-
-    def intervaloTiempoEsperaDescarga(tren_id: Int): Cancellable = {
-      val r = new Random()
-      val rnd = 5 + r.nextInt(5)
-      log.info(s"   [Tren $tren_id] random number espera descarga $rnd")
-      context.system.scheduler.scheduleOnce(rnd.seconds){
-        self ! InicioDescarga
-      }
-    }
-
-    def intervaloTiempoEsperaInicioViaje(tren_id: Int): Cancellable = {
-      val r = new Random()
-      val rnd = 5 + r.nextInt(5)
-      log.info(s"   [Tren $tren_id] random number espera inicio viaje $rnd")
-      context.system.scheduler.scheduleOnce(rnd.seconds){
-        self ! InicioViaje
-      }
-    }
-
-    def intervaloTiempoEntregaAlmacen(tren_id: Int): Cancellable = {
-      val r = new Random()
-      val rnd = 5 + r.nextInt(5)
-      log.info(s"   [Tren $tren_id] random number entrega almacen $rnd")
-      context.system.scheduler.scheduleOnce(rnd.seconds){
-        self ! EntregarAlmacen
       }
     }
 
