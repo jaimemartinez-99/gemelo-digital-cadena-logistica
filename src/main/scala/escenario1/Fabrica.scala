@@ -18,7 +18,7 @@ object Fabrica {
   import system.dispatcher //TODO ES NECESARIO ESTO??
 
   object Fabrica {
-    case class  ResetearFabrica(localizacion: Localizacion)
+    case class  ResetearFabrica(id: Int, localizacion: Localizacion)
     case object CrearPaquete
     case class  SalidaPaquetes (capacidadTren: Int, localizacionDestino: Localizacion)
   }
@@ -26,12 +26,12 @@ object Fabrica {
   class Fabrica extends Actor with ActorLogging {
     import Fabrica._
 
-    var schedule: Cancellable = intervaloTiempoGenerarPaquete()
+    var schedule: Cancellable = _
 
-    def intervaloTiempoGenerarPaquete(): Cancellable = {
+    def intervaloTiempoGenerarPaquete(id: Int): Cancellable = {
       val r = new Random()
       val rnd = 1 + r.nextInt(2)
-      log.info(s"[Fabrica] random number generar $rnd")
+      // log.info(s"[Fabrica $id] random number generar $rnd")
       context.system.scheduler.scheduleOnce(rnd.seconds){
         self ! CrearPaquete
       }
@@ -88,31 +88,32 @@ object Fabrica {
     }
 
     override def receive: Receive = {
-      case ResetearFabrica (localizacion) =>
-        log.info(s"[Fabrica] Iniciada en ${localizacion.name}")
-        context.become(iniciada(Seq[Paquete](), Seq[Int](), localizacion))
+      case ResetearFabrica (id, localizacion) =>
+        log.info(s"[Fabrica $id] Iniciada en ${localizacion.name}")
+        schedule = intervaloTiempoGenerarPaquete(id)
+        context.become(iniciada(id, Seq[Paquete](), Seq[Int](), localizacion))
     }
 
-    def iniciada(listaPaquetes: Seq[Paquete], listaTodosIdPaquetes: Seq[Int], localizacion: Localizacion): Receive = {
+    def iniciada(id: Int, listaPaquetes: Seq[Paquete], listaTodosIdPaquetes: Seq[Int], localizacion: Localizacion): Receive = {
       case CrearPaquete =>
         val paquete_id = listaTodosIdPaquetes.size + 1
         val cliente = clienteAleatorio()  // Cliente aleatorio
         val localizacionDestino = localizacionDestinoAleatorio(localizacion) // Destino final aleatorio
         val prioridad = prioridadAleatoria() // Prioridad aleatoria
         val paquete = Paquete(paquete_id, prioridad, cliente, localizacionDestino)
-        log.info(s"[Fabrica] Evento: ITEM GENERADO, Paquete(id: ${paquete.id}, prioridad: ${paquete.prioridad}, cliente: ${paquete.cliente.name}, destino final: ${paquete.localizacionDestino.name}) generado")
+        // log.info(s"[Fabrica $id] Evento: ITEM GENERADO, Paquete(id: ${paquete.id}, prioridad: ${paquete.prioridad}, cliente: ${paquete.cliente.name}, destino final: ${paquete.localizacionDestino.name}) generado")
         val nuevaListaTodosIdPaquetes = listaTodosIdPaquetes :+ paquete.id
         val nuevaListaPaquetes = listaPaquetes :+ paquete
         schedule.cancel()
-        schedule = intervaloTiempoGenerarPaquete()
-        context.become(iniciada(nuevaListaPaquetes, nuevaListaTodosIdPaquetes,localizacion))
+        schedule = intervaloTiempoGenerarPaquete(id)
+        context.become(iniciada(id, nuevaListaPaquetes, nuevaListaTodosIdPaquetes,localizacion))
 
       case SalidaPaquetes (capacidadTren, localizacionDestino) =>
         val listaSalidaPaquetes = take(listaPaquetes, capacidadTren, localizacionDestino)
         val listaPaquetesRestantes = listaPaquetes.diff(listaSalidaPaquetes)
-        log.info(s"[Fabrica] ${listaPaquetesRestantes.map(p => p.id)} restantes")
+        log.info(s"[Fabrica $id] ${listaPaquetesRestantes.map(p => p.id)} restantes")
         sender() ! RecibirPaquetes(listaSalidaPaquetes)
-        context.become(iniciada(listaPaquetesRestantes, listaTodosIdPaquetes,localizacion))
+        context.become(iniciada(id, listaPaquetesRestantes, listaTodosIdPaquetes,localizacion))
     }
   }
 
