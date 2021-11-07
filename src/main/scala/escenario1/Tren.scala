@@ -15,7 +15,7 @@ object Tren {
    * Tren
    */
 
-  import system.dispatcher //TODO ES NECESARIO ESTO??
+  import system.dispatcher //TODO POR QUE ES NECESARIO ESTO?
 
   object Tren {
     case class  IniciarTren(id: Int, capacidad: Int, ruta: Seq[Localizacion])
@@ -32,22 +32,21 @@ object Tren {
 
     var scheduleTren: Cancellable = _
 
-    def intervaloTiempoTren(evento: String, tren_id: Int, capacidad: Int, localizacionOrigen: Localizacion, localizacionDestino: Localizacion): Cancellable = {
+    def intervaloTiempoTren(evento: String, tren_id: Int, capacidad: Int, ruta: Seq[Localizacion]): Cancellable = {
       val r = new Random()
       evento match {
         case "recibirPaquetes" =>
           val rnd = 30 + r.nextInt(10)
           log.info(s"    [Tren $tren_id] random number recibir $rnd")
           context.system.scheduler.scheduleOnce(rnd.seconds){
-            localizacionOrigen.name match {
-              case "Madrid" =>  fabrica1 ! SalidaPaquetes(capacidad, localizacionDestino)
-              case "Zaragoza" => fabrica2 ! SalidaPaquetes(capacidad, localizacionDestino)
-              case "Valencia" => fabrica3 ! SalidaPaquetes(capacidad, localizacionDestino)
-              case "Barcelona" => fabrica4 ! SalidaPaquetes(capacidad, localizacionDestino)
-              case "Sevilla" => fabrica5 ! SalidaPaquetes(capacidad, localizacionDestino)
+            ruta.head.name match {
+              case "Madrid" =>  fabrica1 ! SalidaPaquetes(capacidad, ruta)
+              case "Zaragoza" => fabrica2 ! SalidaPaquetes(capacidad, ruta)
+              case "Valencia" => fabrica3 ! SalidaPaquetes(capacidad, ruta)
+              case "Barcelona" => fabrica4 ! SalidaPaquetes(capacidad, ruta)
+              case "Sevilla" => fabrica5 ! SalidaPaquetes(capacidad, ruta)
             }
           }
-
         case "cargarDescargarPaquetes" =>
           val rnd = 5 + r.nextInt(5)
           log.info(s"    [Tren $tren_id] random number cargar/descargar $rnd")
@@ -100,23 +99,24 @@ object Tren {
     override def receive: Receive =  {
       case IniciarTren(id,capacidad,ruta) =>
         log.info(s"    [Tren $id] Iniciado en ${ruta.head.name} con una capacidad maxima de $capacidad paquetes")
-        scheduleTren = intervaloTiempoTren("recibirPaquetes",id, capacidad, ruta.head, ruta(1))
-        context.become(enOrigen(id, capacidad, ruta.head, ruta(1), ruta))
+        scheduleTren = intervaloTiempoTren("recibirPaquetes",id, capacidad, ruta)
+        context.become(enOrigen(id, Seq[Paquete](), capacidad, ruta.head, ruta(1), ruta))
     }
 
-    def enOrigen(id: Int, capacidad: Int, localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion]): Receive = {
+    def enOrigen(id: Int, listaPaquetesTren: Seq[Paquete], capacidad: Int, localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion]): Receive = {
       case RecibirPaquetes (listaPaquetes) =>
         scheduleTren.cancel()
-        log.info(s"    [Tren $id] Evento: INICIO CARGA DEL TREN, Salida de paquetes: ${listaPaquetes.map(p => p.id)}, Origen: ${localizacionOrigen.name}, Destino: ${localizacionDestino.name}")
-        scheduleTren = intervaloTiempoTren("cargarDescargarPaquetes",id, capacidad, localizacionOrigen, localizacionDestino)
-        context.become(enCarga(id, capacidad, listaPaquetes, localizacionOrigen, localizacionDestino, ruta))
+        val nuevaListaPaquetesTren = listaPaquetesTren ++ listaPaquetes
+        log.info(s"    [Tren $id] Evento: INICIO CARGA DEL TREN, Salida de paquetes: ${nuevaListaPaquetesTren.map(p => p.id)}, Origen: ${localizacionOrigen.name}, Destino: ${localizacionDestino.name}")
+        scheduleTren = intervaloTiempoTren("cargarDescargarPaquetes",id, capacidad, ruta)
+        context.become(enCarga(id, capacidad, nuevaListaPaquetesTren, localizacionOrigen, localizacionDestino, ruta))
     }
 
     def enCarga(id: Int, capacidad: Int, listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion]): Receive = {
       case FinCargaDescarga =>
         scheduleTren.cancel()
         log.info(s"    [Tren $id] Evento: FIN CARGA")
-        scheduleTren = intervaloTiempoTren("esperaInicioViaje",id, capacidad, localizacionOrigen, localizacionDestino)
+        scheduleTren = intervaloTiempoTren("esperaInicioViaje",id, capacidad, ruta)
         context.become(enEsperaInicioViaje(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta))
 
     }
@@ -125,7 +125,7 @@ object Tren {
       case InicioViaje =>
         scheduleTren.cancel()
         log.info(s"    [Tren $id] Evento: SALIDA DESDE EL ORIGEN")
-        scheduleTren = intervaloTiempoTren("viaje",id, capacidad, localizacionOrigen, localizacionDestino)
+        scheduleTren = intervaloTiempoTren("viaje",id, capacidad, ruta)
         context.become(enViaje(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta))
     }
 
@@ -133,7 +133,7 @@ object Tren {
       case FinViaje =>
         scheduleTren.cancel()
         log.info(s"    [Tren $id] Evento: LLEGADA A DESTINO")
-        scheduleTren = intervaloTiempoTren("esperaDescargaPaquetes",id, capacidad, localizacionOrigen, localizacionDestino)
+        scheduleTren = intervaloTiempoTren("esperaDescargaPaquetes",id, capacidad, ruta)
         context.become(enDestinoSinDescarga(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta))
     }
 
@@ -141,7 +141,7 @@ object Tren {
       case InicioDescarga =>
         scheduleTren.cancel()
         log.info(s"    [Tren $id] Evento: INICIO DESCARGA")
-        scheduleTren = intervaloTiempoTren("cargarDescargarPaquetes",id, capacidad, localizacionOrigen, localizacionDestino)
+        scheduleTren = intervaloTiempoTren("cargarDescargarPaquetes",id, capacidad, ruta)
         context.become(enDescarga(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta))
     }
 
@@ -149,24 +149,33 @@ object Tren {
       case FinCargaDescarga =>
         scheduleTren.cancel()
         log.info(s"    [Tren $id] Evento: FIN DESCARGA")
-        scheduleTren = intervaloTiempoTren("entregaAlmacen",id, capacidad, localizacionOrigen, localizacionDestino)
+        scheduleTren = intervaloTiempoTren("entregaAlmacen",id, capacidad, ruta)
         context.become(enDestino(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta))
     }
 
     def enDestino(id: Int, capacidad: Int, listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion]): Receive = {
       case EntregarAlmacen =>
         scheduleTren.cancel()
+        var listaPaquetesParaAlmacen = Seq[Paquete]()
+        listaPaquetesTren.foreach(p =>
+          if(p.localizacionDestino == localizacionDestino){
+            listaPaquetesParaAlmacen = listaPaquetesParaAlmacen :+ p
+          }
+        )
+        log.info(s"listaPaquetes para almacen: ${listaPaquetesParaAlmacen.map(p=>p.id)}")
         localizacionDestino.name match {
-          case "Madrid" => almacen1 ! RecibirPaquetesAlmacen(listaPaquetesTren)
-          case "Zaragoza" => almacen2 ! RecibirPaquetesAlmacen(listaPaquetesTren)
-          case "Valencia" => almacen3 ! RecibirPaquetesAlmacen(listaPaquetesTren)
-          case "Barcelona" => almacen4 ! RecibirPaquetesAlmacen(listaPaquetesTren)
-          case "Sevilla" => almacen5 ! RecibirPaquetesAlmacen(listaPaquetesTren)
+          case "Madrid" => almacen1 ! RecibirPaquetesAlmacen(listaPaquetesParaAlmacen)
+          case "Zaragoza" => almacen2 ! RecibirPaquetesAlmacen(listaPaquetesParaAlmacen)
+          case "Valencia" => almacen3 ! RecibirPaquetesAlmacen(listaPaquetesParaAlmacen)
+          case "Barcelona" => almacen4 ! RecibirPaquetesAlmacen(listaPaquetesParaAlmacen)
+          case "Sevilla" => almacen5 ! RecibirPaquetesAlmacen(listaPaquetesParaAlmacen)
         }
         val nuevaRuta: Seq[Localizacion] = ruta.tail :+ ruta.head
-        log.info(s"    [Tren $id] En ${nuevaRuta.head.name} con una capacidad maxima de $capacidad paquetes")
-        scheduleTren = intervaloTiempoTren("recibirPaquetes", id, capacidad, nuevaRuta.head, nuevaRuta(1))
-        context.become(enOrigen(id, capacidad, nuevaRuta.head, nuevaRuta(1), nuevaRuta))
+        val nuevaListaPaquetesTren = listaPaquetesTren.diff(listaPaquetesParaAlmacen)
+        val capacidadRestante = capacidad - nuevaListaPaquetesTren.size
+        log.info(s"    [Tren $id] En ${nuevaRuta.head.name} con una capacidad maxima de $capacidad paquetes y los paquetes: ${nuevaListaPaquetesTren.map(p => p.id)}")
+        scheduleTren = intervaloTiempoTren("recibirPaquetes", id, capacidadRestante, nuevaRuta)
+        context.become(enOrigen(id, nuevaListaPaquetesTren, capacidad, nuevaRuta.head, nuevaRuta(1), nuevaRuta))
     }
   }
 

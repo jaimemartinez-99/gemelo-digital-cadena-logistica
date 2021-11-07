@@ -40,15 +40,15 @@ object App extends App {
 
   fabrica1 ! ResetearFabrica(1, locMadrid)
   fabrica2 ! ResetearFabrica(2, locZaragoza)
-  fabrica3 ! ResetearFabrica(3, locValencia)
+  // fabrica3 ! ResetearFabrica(3, locValencia)
   fabrica4 ! ResetearFabrica(4, locBarcelona)
-  fabrica5 ! ResetearFabrica(5, locSevilla)
+  // fabrica5 ! ResetearFabrica(5, locSevilla)
 
-  val ruta1 = Seq[Localizacion](locMadrid, locZaragoza,locBarcelona)
+  val ruta1 = Seq[Localizacion](locMadrid, locZaragoza, locBarcelona)
   val ruta2 = Seq[Localizacion](locValencia, locMadrid, locSevilla)
 
-  tren1 ! IniciarTren(1,6,ruta1)
-  tren2 ! IniciarTren(2,8,ruta2)
+  tren1 ! IniciarTren(1, 10, ruta1)
+  // tren2 ! IniciarTren(2,8,ruta2)
 
   almacen1 ! ResetearAlmacen(1, locMadrid)
   almacen2 ! ResetearAlmacen(2, locZaragoza)

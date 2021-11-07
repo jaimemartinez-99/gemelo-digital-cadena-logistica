@@ -20,7 +20,7 @@ object Fabrica {
   object Fabrica {
     case class  ResetearFabrica(id: Int, localizacion: Localizacion)
     case object CrearPaquete
-    case class  SalidaPaquetes (capacidadTren: Int, localizacionDestino: Localizacion)
+    case class  SalidaPaquetes (capacidadTren: Int, ruta: Seq[Localizacion])
   }
 
   class Fabrica extends Actor with ActorLogging {
@@ -30,30 +30,32 @@ object Fabrica {
 
     def intervaloTiempoGenerarPaquete(id: Int): Cancellable = {
       val r = new Random()
-      val rnd = 1 + r.nextInt(2)
+      val rnd = 2 + r.nextInt(2)
       // log.info(s"[Fabrica $id] random number generar $rnd")
       context.system.scheduler.scheduleOnce(rnd.seconds){
         self ! CrearPaquete
       }
     }
 
-    def take(lista: Seq[Paquete], capacidad: Int, localizacionDestino: Localizacion): Seq[Paquete] = {
+    def take(lista: Seq[Paquete], capacidad: Int, ruta: Seq[Localizacion]): Seq[Paquete] = {
       val listaVieja = lista
       var listaNueva = Seq[Paquete]()
       var i = 0
       breakable {
         for(j <- 1 to 3) {
-          // Compruebo que la lista nueva no supere la capacidad y que se recorre toda la lista vieja
-          while (listaNueva.size < capacidad && i < listaVieja.size) {
-            if (listaVieja(i).localizacionDestino == localizacionDestino && listaVieja(i).prioridad == j) {
-              listaNueva = listaNueva :+ listaVieja(i)
+          for(locDestino <- ruta.tail){
+            // Compruebo que la lista nueva no supere la capacidad y que se recorre toda la lista vieja
+            while (listaNueva.size < capacidad && i < listaVieja.size) {
+              if (listaVieja(i).localizacionDestino == locDestino && listaVieja(i).prioridad == j) {
+                listaNueva = listaNueva :+ listaVieja(i)
+              }
+              if (listaNueva.size == capacidad){
+                break
+              }
+              i += 1
             }
-            if (listaNueva.size == capacidad){
-              break
-            }
-            i += 1
+            i = 0
           }
-          i = 0
         }
       }
       listaNueva
@@ -101,15 +103,15 @@ object Fabrica {
         val localizacionDestino = localizacionDestinoAleatorio(localizacion) // Destino final aleatorio
         val prioridad = prioridadAleatoria() // Prioridad aleatoria
         val paquete = Paquete(paquete_id, prioridad, cliente, localizacionDestino)
-        // log.info(s"[Fabrica $id] Evento: ITEM GENERADO, Paquete(id: ${paquete.id}, prioridad: ${paquete.prioridad}, cliente: ${paquete.cliente.name}, destino final: ${paquete.localizacionDestino.name}) generado")
+        log.info(s"[Fabrica $id] Evento: ITEM GENERADO, Paquete(id: ${paquete.id}, prioridad: ${paquete.prioridad}, cliente: ${paquete.cliente.name}, destino final: ${paquete.localizacionDestino.name}) generado")
         val nuevaListaTodosIdPaquetes = listaTodosIdPaquetes :+ paquete.id
         val nuevaListaPaquetes = listaPaquetes :+ paquete
         schedule.cancel()
         schedule = intervaloTiempoGenerarPaquete(id)
         context.become(iniciada(id, nuevaListaPaquetes, nuevaListaTodosIdPaquetes,localizacion))
 
-      case SalidaPaquetes (capacidadTren, localizacionDestino) =>
-        val listaSalidaPaquetes = take(listaPaquetes, capacidadTren, localizacionDestino)
+      case SalidaPaquetes (capacidadTren, ruta) =>
+        val listaSalidaPaquetes = take(listaPaquetes, capacidadTren, ruta)
         val listaPaquetesRestantes = listaPaquetes.diff(listaSalidaPaquetes)
         log.info(s"[Fabrica $id] ${listaPaquetesRestantes.map(p => p.id)} restantes")
         sender() ! RecibirPaquetes(listaSalidaPaquetes)
