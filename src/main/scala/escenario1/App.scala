@@ -18,29 +18,41 @@ object App extends App {
   val fabrica4 = system.actorOf(Props[Fabrica], "fabrica4")
   val fabrica5 = system.actorOf(Props[Fabrica], "fabrica5")
 
-  val tren = system.actorOf(Props[Tren], "tren")
-  val almacen = system.actorOf(Props[Almacen], "almacen")
+  val tren1 = system.actorOf(Props[Tren], "tren1")
+  val tren2 = system.actorOf(Props[Tren], "tren2")
+
+  val almacen1 = system.actorOf(Props[Almacen], "almacen1")
+  val almacen2 = system.actorOf(Props[Almacen], "almacen2")
+  val almacen3 = system.actorOf(Props[Almacen], "almacen3")
+  val almacen4 = system.actorOf(Props[Almacen], "almacen4")
+  val almacen5 = system.actorOf(Props[Almacen], "almacen5")
 
   import Tren._
   import Almacen._
   import Fabrica._
 
   // Inicializacion de los actores principales
-  fabrica1 ! ResetearFabrica(1, Localizacion(1,"Madrid"))
-  fabrica2 ! ResetearFabrica(2, Localizacion(1,"Zaragoza"))
-  fabrica3 ! ResetearFabrica(3, Localizacion(1,"Valencia"))
-  fabrica4 ! ResetearFabrica(4, Localizacion(1,"Barcelona"))
-  fabrica5 ! ResetearFabrica(5, Localizacion(1,"Sevilla"))
-
   val locMadrid = Localizacion(1,"Madrid")
   val locZaragoza = Localizacion(1,"Zaragoza")
   val locValencia = Localizacion(1,"Valencia")
   val locBarcelona = Localizacion(1,"Barcelona")
   val locSevilla = Localizacion(1,"Sevilla")
-  var ruta1 = Seq[Localizacion](locMadrid, locZaragoza)
 
-  tren ! IniciarTren(1,6,ruta1)
-  almacen ! ResetearAlmacen(Localizacion(1,"Valencia"))
+  fabrica1 ! ResetearFabrica(1, locMadrid)
+  fabrica2 ! ResetearFabrica(2, locZaragoza)
+  fabrica3 ! ResetearFabrica(3, locValencia)
+  fabrica4 ! ResetearFabrica(4, locBarcelona)
+  fabrica5 ! ResetearFabrica(5, locSevilla)
 
+  val ruta1 = Seq[Localizacion](locMadrid, locZaragoza,locBarcelona)
+  val ruta2 = Seq[Localizacion](locValencia, locMadrid, locSevilla)
 
+  tren1 ! IniciarTren(1,6,ruta1)
+  tren2 ! IniciarTren(2,8,ruta2)
+
+  almacen1 ! ResetearAlmacen(1, locMadrid)
+  almacen2 ! ResetearAlmacen(2, locZaragoza)
+  almacen3 ! ResetearAlmacen(3, locValencia)
+  almacen4 ! ResetearAlmacen(4, locBarcelona)
+  almacen5 ! ResetearAlmacen(5, locSevilla)
 }

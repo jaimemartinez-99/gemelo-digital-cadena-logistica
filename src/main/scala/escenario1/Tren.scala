@@ -4,7 +4,7 @@ import akka.actor.{Actor, ActorLogging, Cancellable}
 import escenario1.Almacen.Almacen.RecibirPaquetesAlmacen
 import escenario1.Basico.{Localizacion, Paquete}
 import escenario1.Fabrica.Fabrica.SalidaPaquetes
-import escenario1.App.{almacen, fabrica1, fabrica2, fabrica3, fabrica4, fabrica5, system}
+import escenario1.App.{almacen1, almacen2, almacen3, almacen4, almacen5, fabrica1, fabrica2, fabrica3, fabrica4, fabrica5, system}
 
 import scala.concurrent.duration._
 import scala.util.Random
@@ -157,11 +157,11 @@ object Tren {
       case EntregarAlmacen =>
         scheduleTren.cancel()
         localizacionDestino.name match {
-          case "Zaragoza" => almacen ! RecibirPaquetesAlmacen(listaPaquetesTren)
-          case "Madrid" => almacen ! RecibirPaquetesAlmacen(listaPaquetesTren)
-          case "Valencia" => almacen ! RecibirPaquetesAlmacen(listaPaquetesTren)
-          case "Barcelona" => almacen ! RecibirPaquetesAlmacen(listaPaquetesTren)
-          case "Sevilla" => almacen ! RecibirPaquetesAlmacen(listaPaquetesTren)
+          case "Madrid" => almacen1 ! RecibirPaquetesAlmacen(listaPaquetesTren)
+          case "Zaragoza" => almacen2 ! RecibirPaquetesAlmacen(listaPaquetesTren)
+          case "Valencia" => almacen3 ! RecibirPaquetesAlmacen(listaPaquetesTren)
+          case "Barcelona" => almacen4 ! RecibirPaquetesAlmacen(listaPaquetesTren)
+          case "Sevilla" => almacen5 ! RecibirPaquetesAlmacen(listaPaquetesTren)
         }
         val nuevaRuta: Seq[Localizacion] = ruta.tail :+ ruta.head
         log.info(s"    [Tren $id] En ${nuevaRuta.head.name} con una capacidad maxima de $capacidad paquetes")

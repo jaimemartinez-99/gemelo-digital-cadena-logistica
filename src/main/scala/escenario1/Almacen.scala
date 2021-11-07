@@ -10,7 +10,7 @@ object Almacen {
    */
 
   object Almacen {
-    case class  ResetearAlmacen(localizacion: Localizacion)
+    case class  ResetearAlmacen(id: Int, localizacion: Localizacion)
     case class  RecibirPaquetesAlmacen(listaPaquetes: Seq[Paquete])
   }
 
@@ -18,17 +18,17 @@ object Almacen {
     import Almacen._
 
     override def receive: Receive = {
-      case ResetearAlmacen(localizacion) =>
-        log.info(s" [Almacen] Iniciado en ${localizacion.name}")
-        context.become(iniciado(Seq[Paquete](),localizacion))
+      case ResetearAlmacen(id, localizacion) =>
+        log.info(s" [Almacen $id] Iniciado en ${localizacion.name}")
+        context.become(iniciado(id, Seq[Paquete](),localizacion))
     }
 
-    def iniciado(listaTodosPaquetesAlmacen: Seq[Paquete], localizacion: Localizacion): Receive = {
+    def iniciado(id: Int, listaTodosPaquetesAlmacen: Seq[Paquete], localizacion: Localizacion): Receive = {
       case RecibirPaquetesAlmacen(listaPaquetes) =>
-        log.info(s" [Almacen] Evento: LLEGADA DE ITEMS AL ALMACEN, Han llegado los paquetes: ${listaPaquetes.map(p => p.id)}")
+        log.info(s" [Almacen $id] Evento: LLEGADA DE ITEMS AL ALMACEN, Han llegado los paquetes: ${listaPaquetes.map(p => p.id)}")
         val nuevaListaTodosPaquetesAlmacen = listaTodosPaquetesAlmacen ++ listaPaquetes
-        log.info(s" [Almacen] Los paquetes que hay actualmente en el almacen son: ${nuevaListaTodosPaquetesAlmacen.map(p => p.id)}")
-        context.become(iniciado(nuevaListaTodosPaquetesAlmacen, localizacion))
+        log.info(s" [Almacen $id] Los paquetes que hay actualmente en el almacen son: ${nuevaListaTodosPaquetesAlmacen.map(p => p.id)}")
+        context.become(iniciado(id, nuevaListaTodosPaquetesAlmacen, localizacion))
     }
   }
 
