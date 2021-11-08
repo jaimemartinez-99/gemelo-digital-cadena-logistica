@@ -18,8 +18,12 @@ object App extends App {
   val fabrica4 = system.actorOf(Props[Fabrica], "fabrica4")
   val fabrica5 = system.actorOf(Props[Fabrica], "fabrica5")
 
+  val fabricaMaster = system.actorOf(Props[FabricaMaster], "fabricaMaster")
+
   val tren1 = system.actorOf(Props[Tren], "tren1")
   val tren2 = system.actorOf(Props[Tren], "tren2")
+
+  val trenMaster = system.actorOf(Props[TrenMaster], "trenMaster")
 
   val almacen1 = system.actorOf(Props[Almacen], "almacen1")
   val almacen2 = system.actorOf(Props[Almacen], "almacen2")
@@ -27,9 +31,14 @@ object App extends App {
   val almacen4 = system.actorOf(Props[Almacen], "almacen4")
   val almacen5 = system.actorOf(Props[Almacen], "almacen5")
 
-  import Tren._
-  import Almacen._
+  val almacenMaster = system.actorOf(Props[AlmacenMaster], "almacenMaster")
+
+  import FabricaMaster._
   import Fabrica._
+  import TrenMaster._
+  import Tren._
+  import AlmacenMaster._
+  import Almacen._
 
   // Inicializacion de los actores principales
   val locMadrid = Localizacion(1,"Madrid")
@@ -38,10 +47,10 @@ object App extends App {
   val locBarcelona = Localizacion(1,"Barcelona")
   val locSevilla = Localizacion(1,"Sevilla")
 
-  fabrica1 ! ResetearFabrica(1, locMadrid)
-  fabrica2 ! ResetearFabrica(2, locZaragoza)
+  //fabrica1 ! ResetearFabrica(1, locMadrid)
+  //fabrica2 ! ResetearFabrica(2, locZaragoza)
   // fabrica3 ! ResetearFabrica(3, locValencia)
-  fabrica4 ! ResetearFabrica(4, locBarcelona)
+  //fabrica4 ! ResetearFabrica(4, locBarcelona)
   // fabrica5 ! ResetearFabrica(5, locSevilla)
 
   val ruta1 = Seq[Localizacion](locMadrid, locZaragoza, locBarcelona)
@@ -52,7 +61,12 @@ object App extends App {
 
   almacen1 ! ResetearAlmacen(1, locMadrid)
   almacen2 ! ResetearAlmacen(2, locZaragoza)
-  almacen3 ! ResetearAlmacen(3, locValencia)
+  // almacen3 ! ResetearAlmacen(3, locValencia)
   almacen4 ! ResetearAlmacen(4, locBarcelona)
-  almacen5 ! ResetearAlmacen(5, locSevilla)
+  // almacen5 ! ResetearAlmacen(5, locSevilla)
+
+  val locsFabrica = Seq[Localizacion](locMadrid, locZaragoza, locValencia, locBarcelona, locSevilla)
+  fabricaMaster ! IniciarFabricaMaster(locsFabrica)
+  trenMaster ! IniciarTrenMaster(2)
+  almacenMaster ! IniciarAlmacenMaster(2)
 }

@@ -3,8 +3,7 @@ package escenario1
 import akka.actor.{Actor, ActorLogging, Cancellable}
 import escenario1.Almacen.Almacen.RecibirPaquetesAlmacen
 import escenario1.Basico.{Localizacion, Paquete}
-import escenario1.Fabrica.Fabrica.SalidaPaquetes
-import escenario1.App.{almacen1, almacen2, almacen3, almacen4, almacen5, fabrica1, fabrica2, fabrica3, fabrica4, fabrica5, system}
+import escenario1.App.{almacen1, almacen2, almacen3, almacen4, almacen5, fabricaMaster, system}
 
 import scala.concurrent.duration._
 import scala.util.Random
@@ -29,6 +28,7 @@ object Tren {
 
   class Tren extends Actor with ActorLogging {
     import Tren._
+    import FabricaMaster._
 
     var scheduleTren: Cancellable = _
 
@@ -39,6 +39,7 @@ object Tren {
           val rnd = 30 + r.nextInt(10)
           log.info(s"    [Tren $tren_id] random number recibir $rnd")
           context.system.scheduler.scheduleOnce(rnd.seconds){
+            /*
             ruta.head.name match {
               case "Madrid" =>  fabrica1 ! SalidaPaquetes(capacidad, ruta)
               case "Zaragoza" => fabrica2 ! SalidaPaquetes(capacidad, ruta)
@@ -46,6 +47,8 @@ object Tren {
               case "Barcelona" => fabrica4 ! SalidaPaquetes(capacidad, ruta)
               case "Sevilla" => fabrica5 ! SalidaPaquetes(capacidad, ruta)
             }
+             */
+            fabricaMaster ! SalidaPaquetesMaster(capacidad, ruta)
           }
         case "cargarDescargarPaquetes" =>
           val rnd = 5 + r.nextInt(5)

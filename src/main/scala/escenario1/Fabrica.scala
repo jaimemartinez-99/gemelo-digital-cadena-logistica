@@ -30,7 +30,7 @@ object Fabrica {
 
     def intervaloTiempoGenerarPaquete(id: Int): Cancellable = {
       val r = new Random()
-      val rnd = 2 + r.nextInt(2)
+      val rnd = 6 + r.nextInt(2)
       // log.info(s"[Fabrica $id] random number generar $rnd")
       context.system.scheduler.scheduleOnce(rnd.seconds){
         self ! CrearPaquete
