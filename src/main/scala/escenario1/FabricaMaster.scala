@@ -7,7 +7,7 @@ import escenario1.Fabrica.Fabrica
 
 object FabricaMaster {
   case class IniciarFabricaMaster(localizaciones: Seq[Localizacion])
-  case class AtributosFabrica (ref: ActorRef, id: Int, localizacion: Localizacion)
+  case class AtributosFabrica(ref: ActorRef, id: Int, localizacion: Localizacion)
   case class SalidaPaquetesMaster(capacidad: Int, ruta: Seq[Localizacion])
 }
 

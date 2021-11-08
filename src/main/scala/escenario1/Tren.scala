@@ -166,15 +166,6 @@ object Tren {
           }
         )
         log.info(s"listaPaquetes para almacen: ${listaPaquetesParaAlmacen.map(p=>p.id)}")
-        /*
-        localizacionDestino.name match {
-          case "Madrid" => almacen1 ! RecibirPaquetesAlmacen(listaPaquetesParaAlmacen)
-          case "Zaragoza" => almacen2 ! RecibirPaquetesAlmacen(listaPaquetesParaAlmacen)
-          case "Valencia" => almacen3 ! RecibirPaquetesAlmacen(listaPaquetesParaAlmacen)
-          case "Barcelona" => almacen4 ! RecibirPaquetesAlmacen(listaPaquetesParaAlmacen)
-          case "Sevilla" => almacen5 ! RecibirPaquetesAlmacen(listaPaquetesParaAlmacen)
-        }
-         */
         almacenMaster ! RecibirPaquetesAlmacenMaster(listaPaquetesParaAlmacen, localizacionDestino)
 
         val nuevaRuta: Seq[Localizacion] = ruta.tail :+ ruta.head
