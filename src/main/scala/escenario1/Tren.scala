@@ -1,9 +1,8 @@
 package escenario1
 
 import akka.actor.{Actor, ActorLogging, Cancellable}
-import escenario1.Almacen.Almacen.RecibirPaquetesAlmacen
 import escenario1.Basico.{Localizacion, Paquete}
-import escenario1.App.{almacen1, almacen2, almacen3, almacen4, almacen5, fabricaMaster, system}
+import escenario1.App.{almacenMaster, fabricaMaster, system}
 
 import scala.concurrent.duration._
 import scala.util.Random
@@ -29,6 +28,7 @@ object Tren {
   class Tren extends Actor with ActorLogging {
     import Tren._
     import FabricaMaster._
+    import AlmacenMaster._
 
     var scheduleTren: Cancellable = _
 
@@ -166,6 +166,7 @@ object Tren {
           }
         )
         log.info(s"listaPaquetes para almacen: ${listaPaquetesParaAlmacen.map(p=>p.id)}")
+        /*
         localizacionDestino.name match {
           case "Madrid" => almacen1 ! RecibirPaquetesAlmacen(listaPaquetesParaAlmacen)
           case "Zaragoza" => almacen2 ! RecibirPaquetesAlmacen(listaPaquetesParaAlmacen)
@@ -173,6 +174,9 @@ object Tren {
           case "Barcelona" => almacen4 ! RecibirPaquetesAlmacen(listaPaquetesParaAlmacen)
           case "Sevilla" => almacen5 ! RecibirPaquetesAlmacen(listaPaquetesParaAlmacen)
         }
+         */
+        almacenMaster ! RecibirPaquetesAlmacenMaster(listaPaquetesParaAlmacen, localizacionDestino)
+
         val nuevaRuta: Seq[Localizacion] = ruta.tail :+ ruta.head
         val nuevaListaPaquetesTren = listaPaquetesTren.diff(listaPaquetesParaAlmacen)
         val capacidadRestante = capacidad - nuevaListaPaquetesTren.size

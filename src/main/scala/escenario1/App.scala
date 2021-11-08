@@ -66,7 +66,8 @@ object App extends App {
   // almacen5 ! ResetearAlmacen(5, locSevilla)
 
   val locsFabrica = Seq[Localizacion](locMadrid, locZaragoza, locValencia, locBarcelona, locSevilla)
+  val locsAlmacen = Seq[Localizacion](locMadrid, locZaragoza, locValencia, locBarcelona, locSevilla)
   fabricaMaster ! IniciarFabricaMaster(locsFabrica)
   trenMaster ! IniciarTrenMaster(2)
-  almacenMaster ! IniciarAlmacenMaster(2)
+  almacenMaster ! IniciarAlmacenMaster(locsAlmacen)
 }

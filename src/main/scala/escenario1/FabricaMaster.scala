@@ -3,7 +3,6 @@ package escenario1
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import escenario1.Basico.Localizacion
 import escenario1.Fabrica.Fabrica
-import escenario1.Fabrica.Fabrica.ResetearFabrica
 
 
 object FabricaMaster {
