@@ -1,7 +1,6 @@
 package escenario1
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
-import escenario1.Almacen.Almacen
 import escenario1.Basico.{Localizacion, Paquete}
 
 object AlmacenMaster {
@@ -23,7 +22,6 @@ class AlmacenMaster extends Actor with ActorLogging {
         almacenes = almacenes :+ AtributosAlmacen(referencias(i), i+1+10, localizaciones(i))
         almacenes(i).ref ! ResetearAlmacen(almacenes(i).id, almacenes(i).localizacion)
       }
-      log.info(s"$almacenes")
       context.become(iniciado(almacenes))
   }
 

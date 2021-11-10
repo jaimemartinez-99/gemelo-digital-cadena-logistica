@@ -2,7 +2,6 @@ package escenario1
 
 import akka.actor.{ActorSystem, Props}
 import escenario1.Basico.Localizacion
-import escenario1.Tren.Tren
 
 object App extends App {
 
@@ -10,16 +9,12 @@ object App extends App {
   val system = ActorSystem("EscenarioBasicoDemo")
 
   // Creacion de los actores principales
-  val tren1 = system.actorOf(Props[Tren], "tren1")
-  val tren2 = system.actorOf(Props[Tren], "tren2")
-
   val fabricaMaster = system.actorOf(Props[FabricaMaster], "fabricaMaster")
   val trenMaster = system.actorOf(Props[TrenMaster], "trenMaster")
   val almacenMaster = system.actorOf(Props[AlmacenMaster], "almacenMaster")
 
   import FabricaMaster._
   import TrenMaster._
-  import Tren._
   import AlmacenMaster._
 
   // Inicializacion de las localizaciones, rutas y actores principales
@@ -31,14 +26,13 @@ object App extends App {
 
   val ruta1 = Seq[Localizacion](locMadrid, locZaragoza, locBarcelona)
   val ruta2 = Seq[Localizacion](locValencia, locMadrid, locSevilla)
+  val rutas = Seq[Seq[Localizacion]](ruta1, ruta2)
 
-  // tren1 ! IniciarTren(1, 10, ruta1)
-  // tren2 ! IniciarTren(2,8,ruta2)
+  val capacidadesTrenes = Seq[Int](10,10)
 
   val locsFabrica = Seq[Localizacion](locMadrid, locZaragoza, locValencia, locBarcelona, locSevilla)
   val locsAlmacen = Seq[Localizacion](locMadrid, locZaragoza, locValencia, locBarcelona, locSevilla)
-  val rutas = Seq[Seq[Localizacion]](ruta1, ruta2)
-  val capacidadesTrenes = Seq[Int](10,10)
+
   fabricaMaster ! IniciarFabricaMaster(locsFabrica)
   trenMaster ! IniciarTrenMaster(rutas, capacidadesTrenes)
   almacenMaster ! IniciarAlmacenMaster(locsAlmacen)

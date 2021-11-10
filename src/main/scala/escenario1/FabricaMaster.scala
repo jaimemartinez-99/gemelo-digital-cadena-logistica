@@ -2,7 +2,6 @@ package escenario1
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import escenario1.Basico.Localizacion
-import escenario1.Fabrica.Fabrica
 
 
 object FabricaMaster {
@@ -24,7 +23,6 @@ class FabricaMaster extends Actor with ActorLogging {
         fabricas = fabricas :+ AtributosFabrica(referencias(i), i+1+10, localizaciones(i))
         fabricas(i).ref ! ResetearFabrica(fabricas(i).id, fabricas(i).localizacion)
       }
-      log.info(s"$fabricas")
       context.become(iniciado(fabricas))
   }
 
