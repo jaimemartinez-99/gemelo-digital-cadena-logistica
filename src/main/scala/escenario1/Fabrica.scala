@@ -1,8 +1,10 @@
 package escenario1
 
 import akka.actor.{Actor, ActorLogging, Cancellable}
+import com.github.nscala_time.time.Imports.{richReadableInstant, richReadableInterval}
 import escenario1.Basico.{Cliente, Localizacion, Paquete}
 import escenario1.App.system
+import org.joda.time.DateTime
 
 import scala.util.Random
 import scala.concurrent.duration._
@@ -12,10 +14,8 @@ import scala.util.control.Breaks.{break, breakable}
  * Fabrica
  */
 
-import system.dispatcher //TODO ES NECESARIO ESTO??
-
 object Fabrica {
-  case class  ResetearFabrica(id: Int, localizacion: Localizacion)
+  case class  ResetearFabrica(id: Int, localizacion: Localizacion, fdv: Int, dtI: DateTime, dt0: DateTime)
   case object CrearPaquete
   case class  SalidaPaquetes (capacidadTren: Int, ruta: Seq[Localizacion])
 }
@@ -23,13 +23,14 @@ object Fabrica {
 class Fabrica extends Actor with ActorLogging {
   import Fabrica._
   import Tren._
+  import system.dispatcher
 
   var schedule: Cancellable = _
 
-  def intervaloTiempoGenerarPaquete(id: Int): Cancellable = {
+  def intervaloTiempoGenerarPaquete(id: Int, fdv: Int): Cancellable = {
     val r = new Random()
-    val rnd = 6 + r.nextInt(2)
-    // log.info(s"[Fabrica $id] random number generar $rnd")
+    val rnd = (6 + r.nextInt(2) ) / fdv
+    log.debug(s"[Fabrica $id] random number generar $rnd")
     context.system.scheduler.scheduleOnce(rnd.seconds){
       self ! CrearPaquete
     }
@@ -88,31 +89,34 @@ class Fabrica extends Actor with ActorLogging {
   }
 
   override def receive: Receive = {
-    case ResetearFabrica (id, localizacion) =>
-      log.info(s"[Fabrica $id] Iniciada en ${localizacion.name}")
-      schedule = intervaloTiempoGenerarPaquete(id)
-      context.become(iniciada(id, Seq[Paquete](), Seq[Int](), localizacion))
+    case ResetearFabrica (id, localizacion, fdv, dtI, dt0) =>
+      val dtEvento = dtI.plus((dt0 to DateTime.now).millis)
+      log.debug(s"[Fabrica $id] Iniciada en ${localizacion.name}, Fecha y hora: $dtEvento")
+      schedule = intervaloTiempoGenerarPaquete(id, fdv)
+      context.become(iniciada(id, Seq[Paquete](), Seq[Int](), localizacion, fdv, dtI, dt0))
   }
 
-  def iniciada(id: Int, listaPaquetes: Seq[Paquete], listaTodosIdPaquetes: Seq[Int], localizacion: Localizacion): Receive = {
+  def iniciada(id: Int, listaPaquetes: Seq[Paquete], listaTodosIdPaquetes: Seq[Int], localizacion: Localizacion, fdv: Int, dtI: DateTime, dt0: DateTime): Receive = {
     case CrearPaquete =>
       val paquete_id = listaTodosIdPaquetes.size + 1
       val cliente = clienteAleatorio()  // Cliente aleatorio
       val localizacionDestino = localizacionDestinoAleatorio(localizacion) // Destino final aleatorio
       val prioridad = prioridadAleatoria() // Prioridad aleatoria
       val paquete = Paquete(paquete_id, prioridad, cliente, localizacionDestino)
-      log.info(s"[Fabrica $id] Evento: ITEM GENERADO, Paquete(id: ${paquete.id}, prioridad: ${paquete.prioridad}, cliente: ${paquete.cliente.name}, destino final: ${paquete.localizacionDestino.name}) generado")
+      val dtEvento = dtI.plus((dt0 to DateTime.now).millis)
+      log.debug(s"[Fabrica $id] Evento: ITEM GENERADO, Paquete(id: ${paquete.id}, prioridad: ${paquete.prioridad}, cliente: ${paquete.cliente.name}, destino final: ${paquete.localizacionDestino.name}) generado, Fecha y hora: $dtEvento")
       val nuevaListaTodosIdPaquetes = listaTodosIdPaquetes :+ paquete.id
       val nuevaListaPaquetes = listaPaquetes :+ paquete
       schedule.cancel()
-      schedule = intervaloTiempoGenerarPaquete(id)
-      context.become(iniciada(id, nuevaListaPaquetes, nuevaListaTodosIdPaquetes,localizacion))
+      schedule = intervaloTiempoGenerarPaquete(id, fdv)
+      context.become(iniciada(id, nuevaListaPaquetes, nuevaListaTodosIdPaquetes,localizacion, fdv, dtI, dt0))
 
     case SalidaPaquetes (capacidadTren, ruta) =>
       val listaSalidaPaquetes = take(listaPaquetes, capacidadTren, ruta)
       val listaPaquetesRestantes = listaPaquetes.diff(listaSalidaPaquetes)
-      log.info(s"[Fabrica $id] ${listaPaquetesRestantes.map(p => p.id)} restantes")
+      val dtEvento = dtI.plus((dt0 to DateTime.now).millis)
+      log.debug(s"[Fabrica $id] ${listaPaquetesRestantes.map(p => p.id)} restantes, Fecha y hora: $dtEvento")
       sender() ! RecibirPaquetes(listaSalidaPaquetes)
-      context.become(iniciada(id, listaPaquetesRestantes, listaTodosIdPaquetes,localizacion))
+      context.become(iniciada(id, listaPaquetesRestantes, listaTodosIdPaquetes,localizacion, fdv, dtI, dt0))
   }
 }
