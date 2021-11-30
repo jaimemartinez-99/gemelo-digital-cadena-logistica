@@ -1,21 +1,24 @@
 package escenario1
 
 import akka.actor.{ActorSystem, Props}
-import com.github.nscala_time.time.Imports.DateTimeZone
 import com.typesafe.config.ConfigFactory
-import escenario1.Basico.Localizacion
-import org.joda.time.DateTime
 
 object App extends App {
 
+  import SistemaMaster._
+
   // Parametros del fichero de configuración
-  //val parametros = ConfigFactory.load("parametros.json")
   val parametros = ConfigFactory.load("application.conf")
 
   // Creacion del sistema
   val system = ActorSystem(s"${parametros.getString("nombreSistema")}")
 
   // Creacion de los actores principales
+  val sistemaMaster = system.actorOf(Props[SistemaMaster], s"${parametros.getString("nombreSistemaMaster")}")
+
+  sistemaMaster ! IniciarSistemaMaster(parametros)
+
+  /*
   val fabricaMaster = system.actorOf(Props[FabricaMaster], s"${parametros.getString("nombreFabricaMaster")}")
   val trenMaster = system.actorOf(Props[TrenMaster], s"${parametros.getString("nombreTrenMaster")}")
   val almacenMaster = system.actorOf(Props[AlmacenMaster], s"${parametros.getString("nombreAlmacenMaster")}")
@@ -33,21 +36,6 @@ object App extends App {
   for (i <- nombresLocalizaciones.indices) {
     localizaciones = localizaciones :+ Localizacion(1, s"${nombresLocalizaciones(i)}")
   }
-
-  /*
-  val locMadrid = Localizacion(1,"Madrid")
-  val locZaragoza = Localizacion(1,"Zaragoza")
-  val locValencia = Localizacion(1,"Valencia")
-  val locBarcelona = Localizacion(1,"Barcelona")
-  val locSevilla = Localizacion(1,"Sevilla")
-
-  val ruta1 = Seq[Localizacion](locMadrid, locZaragoza, locBarcelona)
-  val ruta2 = Seq[Localizacion](locValencia, locMadrid, locSevilla)
-  val rutas1 = Seq[Seq[Localizacion]](ruta1, ruta2)
-
-  val capacidadesTrenes1 = Seq[Int](10,10)
-
-   */
 
   var rutas = Seq[Seq[Localizacion]]()
   for (i <- 1 to numeroRutas) {
@@ -95,5 +83,7 @@ object App extends App {
 
   fabricaMaster ! IniciarFabricaMaster(locsFabrica, factorVelocidad, initialDT, actualDT)
   trenMaster ! IniciarTrenMaster(rutas, capacidadesTrenes, factorVelocidad, initialDT, actualDT)
-  almacenMaster ! IniciarAlmacenMaster(locsAlmacen, initialDT, actualDT)
+  almacenMaster ! IniciarAlmacenMaster(locsAlmacen, factorVelocidad, initialDT, actualDT)
+
+   */
 }

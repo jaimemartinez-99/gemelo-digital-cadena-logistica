@@ -1,9 +1,9 @@
 package escenario1
 
-import akka.actor.{Actor, ActorLogging, Cancellable}
+import akka.actor.{Actor, ActorLogging, ActorRef, Cancellable}
 import com.github.nscala_time.time.Imports.{richReadableInstant, richReadableInterval}
 import escenario1.Basico.{Localizacion, Paquete}
-import escenario1.App.{almacenMaster, fabricaMaster, system}
+import escenario1.App.system
 import org.joda.time.DateTime
 
 import scala.concurrent.duration._
@@ -14,7 +14,7 @@ import scala.util.Random
  */
 
 object Tren {
-  case class  IniciarTren(id: Int, capacidad: Int, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime)
+  case class  IniciarTren(id: Int, capacidad: Int, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef)
   case class  RecibirPaquetes (listaPaquetes: Seq[Paquete])
   case object FinCargaDescarga
   case object InicioViaje
@@ -31,7 +31,7 @@ class Tren extends Actor with ActorLogging {
 
   var scheduleTren: Cancellable = _
 
-  def intervaloTiempoTren(evento: String, tren_id: Int, capacidad: Int, ruta: Seq[Localizacion], fdv: Int): Cancellable = {
+  def intervaloTiempoTren(evento: String, tren_id: Int, capacidad: Int, ruta: Seq[Localizacion], fdv: Int, fabMasterRef: ActorRef): Cancellable = {
     val r = new Random()
     evento match {
       case "recibirPaquetes" =>
@@ -47,7 +47,7 @@ class Tren extends Actor with ActorLogging {
             case "Sevilla" => fabrica5 ! SalidaPaquetes(capacidad, ruta)
           }
            */
-          fabricaMaster ! SalidaPaquetesMaster(capacidad, ruta)
+          fabMasterRef ! SalidaPaquetesMaster(capacidad, ruta)
         }
       case "cargarDescargarPaquetes" =>
         val rnd = (5 + r.nextInt(5)) / fdv
@@ -62,7 +62,7 @@ class Tren extends Actor with ActorLogging {
           self ! FinViaje
         }
       case "esperaInicioViaje" =>
-        val rnd = (5 + r.nextInt(5)) / fdv
+        val rnd = (5 + r.nextInt(5))/ fdv
         log.debug(s"    [Tren $tren_id] random number espera inicio viaje $rnd")
         context.system.scheduler.scheduleOnce(rnd.seconds){
           self ! InicioViaje
@@ -99,70 +99,70 @@ class Tren extends Actor with ActorLogging {
   }
 
   override def receive: Receive =  {
-    case IniciarTren(id,capacidad,ruta, fdv, dtI, dt0) =>
-      val dtEvento = dtI.plus((dt0 to DateTime.now).millis)
+    case IniciarTren(id,capacidad,ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef) =>
+      val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"    [Tren $id] Iniciado en ${ruta.head.name} con una capacidad maxima de $capacidad paquetes, Fecha y hora: $dtEvento")
-      scheduleTren = intervaloTiempoTren("recibirPaquetes",id, capacidad, ruta, fdv)
-      context.become(enOrigen(id, Seq[Paquete](), capacidad, ruta.head, ruta(1), ruta, fdv, dtI, dt0))
+      scheduleTren = intervaloTiempoTren("recibirPaquetes",id, capacidad, ruta, fdv, fabMasterRef)
+      context.become(enOrigen(id, Seq[Paquete](), capacidad, ruta.head, ruta(1), ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
 
-  def enOrigen(id: Int, listaPaquetesTren: Seq[Paquete], capacidad: Int, localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime): Receive = {
+  def enOrigen(id: Int, listaPaquetesTren: Seq[Paquete], capacidad: Int, localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef): Receive = {
     case RecibirPaquetes (listaPaquetes) =>
       scheduleTren.cancel()
       val nuevaListaPaquetesTren = listaPaquetesTren ++ listaPaquetes
-      val dtEvento = dtI.plus((dt0 to DateTime.now).millis)
+      val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"    [Tren $id] Evento: INICIO CARGA DEL TREN, Salida de paquetes: ${nuevaListaPaquetesTren.map(p => p.id)}, Origen: ${localizacionOrigen.name}, Destino: ${localizacionDestino.name}, Fecha y hora: $dtEvento")
-      scheduleTren = intervaloTiempoTren("cargarDescargarPaquetes",id, capacidad, ruta, fdv)
-      context.become(enCarga(id, capacidad, nuevaListaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0))
+      scheduleTren = intervaloTiempoTren("cargarDescargarPaquetes",id, capacidad, ruta, fdv, fabMasterRef)
+      context.become(enCarga(id, capacidad, nuevaListaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
 
-  def enCarga(id: Int, capacidad: Int, listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime): Receive = {
+  def enCarga(id: Int, capacidad: Int, listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef): Receive = {
     case FinCargaDescarga =>
       scheduleTren.cancel()
-      val dtEvento = dtI.plus((dt0 to DateTime.now).millis)
+      val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"    [Tren $id] Evento: FIN CARGA, Fecha y hora: $dtEvento")
-      scheduleTren = intervaloTiempoTren("esperaInicioViaje",id, capacidad, ruta, fdv)
-      context.become(enEsperaInicioViaje(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0))
+      scheduleTren = intervaloTiempoTren("esperaInicioViaje",id, capacidad, ruta, fdv, fabMasterRef)
+      context.become(enEsperaInicioViaje(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
 
   }
 
-  def enEsperaInicioViaje(id: Int, capacidad: Int, listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime): Receive = {
+  def enEsperaInicioViaje(id: Int, capacidad: Int, listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef): Receive = {
     case InicioViaje =>
       scheduleTren.cancel()
-      val dtEvento = dtI.plus((dt0 to DateTime.now).millis)
+      val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"    [Tren $id] Evento: SALIDA DESDE EL ORIGEN, Fecha y hora: $dtEvento")
-      scheduleTren = intervaloTiempoTren("viaje",id, capacidad, ruta, fdv)
-      context.become(enViaje(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0))
+      scheduleTren = intervaloTiempoTren("viaje",id, capacidad, ruta, fdv, fabMasterRef)
+      context.become(enViaje(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
 
-  def enViaje(id: Int, capacidad: Int, listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime): Receive =  {
+  def enViaje(id: Int, capacidad: Int, listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef): Receive =  {
     case FinViaje =>
       scheduleTren.cancel()
-      val dtEvento = dtI.plus((dt0 to DateTime.now).millis)
+      val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"    [Tren $id] Evento: LLEGADA A DESTINO, Fecha y hora: $dtEvento")
-      scheduleTren = intervaloTiempoTren("esperaDescargaPaquetes",id, capacidad, ruta, fdv)
-      context.become(enDestinoSinDescarga(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0))
+      scheduleTren = intervaloTiempoTren("esperaDescargaPaquetes",id, capacidad, ruta, fdv, fabMasterRef)
+      context.become(enDestinoSinDescarga(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
 
-  def enDestinoSinDescarga(id: Int, capacidad: Int, listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime): Receive =  {
+  def enDestinoSinDescarga(id: Int, capacidad: Int, listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef): Receive =  {
     case InicioDescarga =>
       scheduleTren.cancel()
-      val dtEvento = dtI.plus((dt0 to DateTime.now).millis)
+      val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"    [Tren $id] Evento: INICIO DESCARGA, Fecha y hora: $dtEvento")
-      scheduleTren = intervaloTiempoTren("cargarDescargarPaquetes",id, capacidad, ruta, fdv)
-      context.become(enDescarga(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0))
+      scheduleTren = intervaloTiempoTren("cargarDescargarPaquetes",id, capacidad, ruta, fdv, fabMasterRef)
+      context.become(enDescarga(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
 
-  def enDescarga(id: Int, capacidad: Int, listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime): Receive =  {
+  def enDescarga(id: Int, capacidad: Int, listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef): Receive =  {
     case FinCargaDescarga =>
       scheduleTren.cancel()
-      val dtEvento = dtI.plus((dt0 to DateTime.now).millis)
+      val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"    [Tren $id] Evento: FIN DESCARGA, Fecha y hora: $dtEvento")
-      scheduleTren = intervaloTiempoTren("entregaAlmacen",id, capacidad, ruta, fdv)
-      context.become(enDestino(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0))
+      scheduleTren = intervaloTiempoTren("entregaAlmacen",id, capacidad, ruta, fdv, fabMasterRef)
+      context.become(enDestino(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
 
-  def enDestino(id: Int, capacidad: Int, listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime): Receive = {
+  def enDestino(id: Int, capacidad: Int, listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef): Receive = {
     case EntregarAlmacen =>
       scheduleTren.cancel()
       var listaPaquetesParaAlmacen = Seq[Paquete]()
@@ -171,16 +171,16 @@ class Tren extends Actor with ActorLogging {
           listaPaquetesParaAlmacen = listaPaquetesParaAlmacen :+ p
         }
       )
-      val dtEvento = dtI.plus((dt0 to DateTime.now).millis)
+      val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"listaPaquetes para almacen: ${listaPaquetesParaAlmacen.map(p=>p.id)}")
-      almacenMaster ! RecibirPaquetesAlmacenMaster(listaPaquetesParaAlmacen, localizacionDestino)
+      almMasterRef ! RecibirPaquetesAlmacenMaster(listaPaquetesParaAlmacen, localizacionDestino)
 
       val nuevaRuta: Seq[Localizacion] = ruta.tail :+ ruta.head
       val nuevaListaPaquetesTren = listaPaquetesTren.diff(listaPaquetesParaAlmacen)
       val capacidadRestante = capacidad - nuevaListaPaquetesTren.size
       log.debug(s"    [Tren $id] En ${nuevaRuta.head.name} con una capacidad maxima de $capacidad paquetes y los paquetes: ${nuevaListaPaquetesTren.map(p => p.id)}, Fecha y hora: $dtEvento")
-      scheduleTren = intervaloTiempoTren("recibirPaquetes", id, capacidadRestante, nuevaRuta, fdv)
-      context.become(enOrigen(id, nuevaListaPaquetesTren, capacidad, nuevaRuta.head, nuevaRuta(1), nuevaRuta, fdv, dtI, dt0))
+      scheduleTren = intervaloTiempoTren("recibirPaquetes", id, capacidadRestante, nuevaRuta, fdv, fabMasterRef)
+      context.become(enOrigen(id, nuevaListaPaquetesTren, capacidad, nuevaRuta.head, nuevaRuta(1), nuevaRuta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
 }
 

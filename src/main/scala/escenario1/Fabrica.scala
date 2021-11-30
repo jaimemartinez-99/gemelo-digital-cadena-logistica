@@ -90,7 +90,7 @@ class Fabrica extends Actor with ActorLogging {
 
   override def receive: Receive = {
     case ResetearFabrica (id, localizacion, fdv, dtI, dt0) =>
-      val dtEvento = dtI.plus((dt0 to DateTime.now).millis)
+      val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"[Fabrica $id] Iniciada en ${localizacion.name}, Fecha y hora: $dtEvento")
       schedule = intervaloTiempoGenerarPaquete(id, fdv)
       context.become(iniciada(id, Seq[Paquete](), Seq[Int](), localizacion, fdv, dtI, dt0))
@@ -103,7 +103,7 @@ class Fabrica extends Actor with ActorLogging {
       val localizacionDestino = localizacionDestinoAleatorio(localizacion) // Destino final aleatorio
       val prioridad = prioridadAleatoria() // Prioridad aleatoria
       val paquete = Paquete(paquete_id, prioridad, cliente, localizacionDestino)
-      val dtEvento = dtI.plus((dt0 to DateTime.now).millis)
+      val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"[Fabrica $id] Evento: ITEM GENERADO, Paquete(id: ${paquete.id}, prioridad: ${paquete.prioridad}, cliente: ${paquete.cliente.name}, destino final: ${paquete.localizacionDestino.name}) generado, Fecha y hora: $dtEvento")
       val nuevaListaTodosIdPaquetes = listaTodosIdPaquetes :+ paquete.id
       val nuevaListaPaquetes = listaPaquetes :+ paquete
@@ -114,7 +114,7 @@ class Fabrica extends Actor with ActorLogging {
     case SalidaPaquetes (capacidadTren, ruta) =>
       val listaSalidaPaquetes = take(listaPaquetes, capacidadTren, ruta)
       val listaPaquetesRestantes = listaPaquetes.diff(listaSalidaPaquetes)
-      val dtEvento = dtI.plus((dt0 to DateTime.now).millis)
+      val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"[Fabrica $id] ${listaPaquetesRestantes.map(p => p.id)} restantes, Fecha y hora: $dtEvento")
       sender() ! RecibirPaquetes(listaSalidaPaquetes)
       context.become(iniciada(id, listaPaquetesRestantes, listaTodosIdPaquetes,localizacion, fdv, dtI, dt0))
