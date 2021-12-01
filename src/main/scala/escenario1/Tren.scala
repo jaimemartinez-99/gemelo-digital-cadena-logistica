@@ -38,15 +38,6 @@ class Tren extends Actor with ActorLogging {
         val rnd = (30 + r.nextInt(10)) / fdv
         log.debug(s"    [Tren $tren_id] random number recibir $rnd")
         context.system.scheduler.scheduleOnce(rnd.seconds){
-          /*
-          ruta.head.name match {
-            case "Madrid" =>  fabrica1 ! SalidaPaquetes(capacidad, ruta)
-            case "Zaragoza" => fabrica2 ! SalidaPaquetes(capacidad, ruta)
-            case "Valencia" => fabrica3 ! SalidaPaquetes(capacidad, ruta)
-            case "Barcelona" => fabrica4 ! SalidaPaquetes(capacidad, ruta)
-            case "Sevilla" => fabrica5 ! SalidaPaquetes(capacidad, ruta)
-          }
-           */
           fabMasterRef ! SalidaPaquetesMaster(capacidad, ruta)
         }
       case "cargarDescargarPaquetes" =>
@@ -82,6 +73,7 @@ class Tren extends Actor with ActorLogging {
     }
   }
 
+  /*
   def localizacionDestinoAleatorio(localizacionOrigen: Localizacion): Localizacion = {
     var str = ""
     do {
@@ -97,6 +89,7 @@ class Tren extends Actor with ActorLogging {
     } while (localizacionOrigen.name == str)
     Localizacion(1, str)
   }
+   */
 
   override def receive: Receive =  {
     case IniciarTren(id,capacidad,ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef) =>

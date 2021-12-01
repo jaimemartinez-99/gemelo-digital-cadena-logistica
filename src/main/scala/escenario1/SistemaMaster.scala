@@ -4,6 +4,7 @@ import akka.actor.{Actor, ActorLogging, Props}
 import com.github.nscala_time.time.Imports.DateTimeZone
 import com.typesafe.config.Config
 import escenario1.Basico.Localizacion
+import escenario1.Basico.Cliente
 import org.joda.time.DateTime
 
 object SistemaMaster {
@@ -27,12 +28,16 @@ class SistemaMaster extends Actor with ActorLogging {
 
       // Inicializacion de las localizaciones, rutas y actores principales
       val nombresLocalizaciones = parametros.getStringList("localizaciones").toArray.toList //application.conf
+      val locsNombreFabrica = parametros.getStringList("locsFabrica").toArray.toList
+      val locsNombreAlmacen = parametros.getStringList("locsFabrica").toArray.toList
+      val nombresClientes = parametros.getStringList("clientes").toArray.toList
+      val factorVelocidad = parametros.getInt("factorVelocidad")
       val numeroRutas = parametros.getObject("rutas").size
       val numeroCapacidades = parametros.getObject("capacidadesTrenes").size
 
       var localizaciones = Seq[Localizacion]()
       for (i <- nombresLocalizaciones.indices) {
-        localizaciones = localizaciones :+ Localizacion(1, s"${nombresLocalizaciones(i)}")
+        localizaciones = localizaciones :+ Localizacion(i+1, s"${nombresLocalizaciones(i)}")
       }
 
       var rutas = Seq[Seq[Localizacion]]()
@@ -49,23 +54,24 @@ class SistemaMaster extends Actor with ActorLogging {
         capacidadesTrenes = capacidadesTrenes :+ capacidadTren
       }
 
-      val locsNombreFabrica = parametros.getStringList("locsFabrica").toArray.toList
       var locsFabrica = Seq[Localizacion]()
       for (i <- locsNombreFabrica.indices){
         if(localizaciones(i).name == locsNombreFabrica(i).toString){
-          locsFabrica = locsFabrica :+ Localizacion(1, s"${locsNombreFabrica(i)}")
+          locsFabrica = locsFabrica :+ Localizacion(i+1, s"${locsNombreFabrica(i)}")
         }
       }
 
-      val locsNombreAlmacen = parametros.getStringList("locsFabrica").toArray.toList
       var locsAlmacen = Seq[Localizacion]()
       for (i <- locsNombreAlmacen.indices){
         if(localizaciones(i).name == locsNombreAlmacen(i).toString){
-          locsAlmacen =  locsAlmacen :+ Localizacion(1, s"${locsNombreAlmacen(i)}")
+          locsAlmacen =  locsAlmacen :+ Localizacion(i+1, s"${locsNombreAlmacen(i)}")
         }
       }
 
-      val factorVelocidad = parametros.getInt("factorVelocidad")
+      var clientes = Seq[Cliente]()
+      for (i <- nombresClientes.indices) {
+        clientes = clientes :+ Cliente(i+1, s"${nombresClientes(i)}")
+      }
 
       // Initial DateTime
       val initialDT = new DateTime(
@@ -79,7 +85,7 @@ class SistemaMaster extends Actor with ActorLogging {
       )
       val actualDT = DateTime.now
 
-      fabricaMaster ! IniciarFabricaMaster(locsFabrica, factorVelocidad, initialDT, actualDT)
+      fabricaMaster ! IniciarFabricaMaster(locsFabrica, factorVelocidad, initialDT, actualDT, clientes, localizaciones)
       trenMaster ! IniciarTrenMaster(rutas, capacidadesTrenes, factorVelocidad, initialDT, actualDT, fabricaMaster, almacenMaster)
       almacenMaster ! IniciarAlmacenMaster(locsAlmacen, factorVelocidad, initialDT, actualDT)
   }

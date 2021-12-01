@@ -15,7 +15,7 @@ import scala.util.control.Breaks.{break, breakable}
  */
 
 object Fabrica {
-  case class  ResetearFabrica(id: Int, localizacion: Localizacion, fdv: Int, dtI: DateTime, dt0: DateTime)
+  case class  ResetearFabrica(id: Int, localizacion: Localizacion, fdv: Int, dtI: DateTime, dt0: DateTime, clientes: Seq[Cliente], localizaciones: Seq[Localizacion])
   case object CrearPaquete
   case class  SalidaPaquetes (capacidadTren: Int, ruta: Seq[Localizacion])
 }
@@ -60,10 +60,10 @@ class Fabrica extends Actor with ActorLogging {
     listaNueva
   }
 
-  def clienteAleatorio(): Cliente = {
+  def clienteAleatorio(clientes: Seq[Cliente]): Cliente = {
     val r = new Random()
-    val rnd = 1 + r.nextInt(5)
-    Cliente(rnd,s"CLIENTE $rnd")
+    val rnd = 1 + r.nextInt(clientes.size)
+    Cliente(clientes(rnd-1).id, clientes(rnd-1).name)
   }
 
   def prioridadAleatoria(): Int = {
@@ -72,11 +72,15 @@ class Fabrica extends Actor with ActorLogging {
     rnd
   }
 
-  def localizacionDestinoAleatorio(localizacionOrigen: Localizacion): Localizacion = {
+  def localizacionDestinoAleatorio(localizacionOrigen: Localizacion, localizaciones: Seq[Localizacion]): Localizacion = {
     var str = ""
+    var id = -1
     do {
       val r = new Random()
-      val rnd = 1 + r.nextInt(5)
+      val rnd = r.nextInt(localizaciones.size)
+      str = localizaciones(rnd).name
+      id = localizaciones(rnd).id
+      /*
       rnd match {
         case 1 => str = "Madrid"
         case 2 => str = "Valencia"
@@ -84,23 +88,24 @@ class Fabrica extends Actor with ActorLogging {
         case 4 => str = "Zaragoza"
         case 5 => str = "Sevilla"
       }
+       */
     } while (localizacionOrigen.name == str)
-    Localizacion(1,str)
+    Localizacion(id,str)
   }
 
   override def receive: Receive = {
-    case ResetearFabrica (id, localizacion, fdv, dtI, dt0) =>
+    case ResetearFabrica (id, localizacion, fdv, dtI, dt0, clientes, localizaciones) =>
       val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"[Fabrica $id] Iniciada en ${localizacion.name}, Fecha y hora: $dtEvento")
       schedule = intervaloTiempoGenerarPaquete(id, fdv)
-      context.become(iniciada(id, Seq[Paquete](), Seq[Int](), localizacion, fdv, dtI, dt0))
+      context.become(iniciada(id, Seq[Paquete](), Seq[Int](), localizacion, fdv, dtI, dt0, clientes, localizaciones))
   }
 
-  def iniciada(id: Int, listaPaquetes: Seq[Paquete], listaTodosIdPaquetes: Seq[Int], localizacion: Localizacion, fdv: Int, dtI: DateTime, dt0: DateTime): Receive = {
+  def iniciada(id: Int, listaPaquetes: Seq[Paquete], listaTodosIdPaquetes: Seq[Int], localizacion: Localizacion, fdv: Int, dtI: DateTime, dt0: DateTime, clientes: Seq[Cliente], localizaciones: Seq[Localizacion]): Receive = {
     case CrearPaquete =>
       val paquete_id = listaTodosIdPaquetes.size + 1
-      val cliente = clienteAleatorio()  // Cliente aleatorio
-      val localizacionDestino = localizacionDestinoAleatorio(localizacion) // Destino final aleatorio
+      val cliente = clienteAleatorio(clientes)  // Cliente aleatorio
+      val localizacionDestino = localizacionDestinoAleatorio(localizacion, localizaciones) // Destino final aleatorio
       val prioridad = prioridadAleatoria() // Prioridad aleatoria
       val paquete = Paquete(paquete_id, prioridad, cliente, localizacionDestino)
       val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
@@ -109,7 +114,7 @@ class Fabrica extends Actor with ActorLogging {
       val nuevaListaPaquetes = listaPaquetes :+ paquete
       schedule.cancel()
       schedule = intervaloTiempoGenerarPaquete(id, fdv)
-      context.become(iniciada(id, nuevaListaPaquetes, nuevaListaTodosIdPaquetes,localizacion, fdv, dtI, dt0))
+      context.become(iniciada(id, nuevaListaPaquetes, nuevaListaTodosIdPaquetes,localizacion, fdv, dtI, dt0, clientes, localizaciones))
 
     case SalidaPaquetes (capacidadTren, ruta) =>
       val listaSalidaPaquetes = take(listaPaquetes, capacidadTren, ruta)
@@ -117,6 +122,6 @@ class Fabrica extends Actor with ActorLogging {
       val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"[Fabrica $id] ${listaPaquetesRestantes.map(p => p.id)} restantes, Fecha y hora: $dtEvento")
       sender() ! RecibirPaquetes(listaSalidaPaquetes)
-      context.become(iniciada(id, listaPaquetesRestantes, listaTodosIdPaquetes,localizacion, fdv, dtI, dt0))
+      context.become(iniciada(id, listaPaquetesRestantes, listaTodosIdPaquetes,localizacion, fdv, dtI, dt0, clientes, localizaciones))
   }
 }
