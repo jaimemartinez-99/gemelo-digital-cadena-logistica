@@ -83,6 +83,7 @@ class SistemaMaster extends Actor with ActorLogging {
         parametros.getInt("dateTime.second"),
         DateTimeZone.forOffsetHours(parametros.getInt("dateTime.dateTimeZone"))
       )
+
       val actualDT = DateTime.now
 
       fabricaMaster ! IniciarFabricaMaster(locsFabrica, factorVelocidad, initialDT, actualDT, clientes, localizaciones)
