@@ -22,5 +22,5 @@ libraryDependencies ++= Seq(
   //"com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.10.0",
   //"com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
   //"ch.qos.logback" % "logback-classic" % "1.2.7" % Runtime
-  "ch.qos.logback" % "logback-classic" % "1.2.7"
+  //"ch.qos.logback" % "logback-classic" % "1.2.7"
 )

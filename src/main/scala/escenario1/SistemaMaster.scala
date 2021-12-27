@@ -11,7 +11,7 @@ object SistemaMaster {
   case class IniciarSistemaMaster(parametros: Config)
 }
 
-class SistemaMaster extends Actor with ActorLogging {
+class  SistemaMaster extends Actor with ActorLogging {
   import SistemaMaster._
   import AlmacenMaster._
   import TrenMaster._
@@ -25,6 +25,7 @@ class SistemaMaster extends Actor with ActorLogging {
       val fabricaMaster = context.actorOf(Props[FabricaMaster], s"${parametros.getString("nombreFabricaMaster")}")
       val trenMaster = context.actorOf(Props[TrenMaster], s"${parametros.getString("nombreTrenMaster")}")
       val almacenMaster = context.actorOf(Props[AlmacenMaster], s"${parametros.getString("nombreAlmacenMaster")}")
+      val producer = context.actorOf(Props[KafkaPublisher], "kafka_producer")
 
       // Inicializacion de las localizaciones, rutas y actores principales
       val nombresLocalizaciones = parametros.getStringList("localizaciones").toArray.toList //application.conf
@@ -86,8 +87,8 @@ class SistemaMaster extends Actor with ActorLogging {
 
       val actualDT = DateTime.now
 
-      fabricaMaster ! IniciarFabricaMaster(locsFabrica, factorVelocidad, initialDT, actualDT, clientes, localizaciones)
-      trenMaster ! IniciarTrenMaster(rutas, capacidadesTrenes, factorVelocidad, initialDT, actualDT, fabricaMaster, almacenMaster)
+      fabricaMaster ! IniciarFabricaMaster(locsFabrica, factorVelocidad, initialDT, actualDT, clientes, localizaciones, producer)
+      trenMaster ! IniciarTrenMaster(rutas, capacidadesTrenes, factorVelocidad, initialDT, actualDT, fabricaMaster, almacenMaster, producer)
       almacenMaster ! IniciarAlmacenMaster(locsAlmacen, factorVelocidad, initialDT, actualDT)
   }
 

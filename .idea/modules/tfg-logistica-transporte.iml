@@ -12,8 +12,6 @@
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="library" name="sbt: ch.qos.logback:logback-classic:1.2.7:jar" level="project" />
-    <orderEntry type="library" name="sbt: ch.qos.logback:logback-core:1.2.7:jar" level="project" />
     <orderEntry type="library" name="sbt: com.fasterxml.jackson.core:jackson-annotations:2.13.0:jar" level="project" />
     <orderEntry type="library" name="sbt: com.fasterxml.jackson.core:jackson-core:2.13.0:jar" level="project" />
     <orderEntry type="library" name="sbt: com.fasterxml.jackson.core:jackson-databind:2.13.0:jar" level="project" />
@@ -53,7 +51,7 @@
     <orderEntry type="library" name="sbt: org.scalatest:scalatest-shouldmatchers_2.13:3.2.9:jar" level="project" />
     <orderEntry type="library" name="sbt: org.scalatest:scalatest-wordspec_2.13:3.2.9:jar" level="project" />
     <orderEntry type="library" name="sbt: org.scalatest:scalatest_2.13:3.2.9:jar" level="project" />
-    <orderEntry type="library" name="sbt: org.slf4j:slf4j-api:1.7.32:jar" level="project" />
+    <orderEntry type="library" name="sbt: org.slf4j:slf4j-api:1.7.30:jar" level="project" />
     <orderEntry type="library" name="sbt: org.xerial.snappy:snappy-java:1.1.8.1:jar" level="project" />
   </component>
 </module>

@@ -14,7 +14,7 @@ import scala.util.Random
  */
 
 object Tren {
-  case class  IniciarTren(id: Int, capacidad: Int, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef)
+  case class  IniciarTren(id: Int, capacidad: Int, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef, producerRef: ActorRef)
   case class  RecibirPaquetes (listaPaquetes: Seq[Paquete])
   case object FinCargaDescarga
   case object InicioViaje
@@ -30,71 +30,61 @@ class Tren extends Actor with ActorLogging {
   import system.dispatcher
 
   var scheduleTren: Cancellable = _
+  var producer: ActorRef = _
 
   def intervaloTiempoTren(evento: String, tren_id: Int, capacidad: Int, ruta: Seq[Localizacion], fdv: Int, fabMasterRef: ActorRef): Cancellable = {
     val r = new Random()
     evento match {
       case "recibirPaquetes" =>
-        val rnd = (30 + r.nextInt(10)) / fdv
+        val rnd = (86400 + r.nextInt(86400*5))*1000 / fdv
+        //1day = 86400seconds
         log.debug(s"    [Tren $tren_id] random number recibir $rnd")
-        context.system.scheduler.scheduleOnce(rnd.seconds){
+        context.system.scheduler.scheduleOnce(rnd.milliseconds){
           fabMasterRef ! SalidaPaquetesMaster(capacidad, ruta)
         }
       case "cargarDescargarPaquetes" =>
-        val rnd = (5 + r.nextInt(5)) / fdv
+        val rnd = (3600*2 + r.nextInt(3600*6))*1000 / fdv
+        //1hour = 3600seconds
         log.debug(s"    [Tren $tren_id] random number cargar/descargar $rnd")
-        context.system.scheduler.scheduleOnce(rnd.seconds){
+        context.system.scheduler.scheduleOnce(rnd.milliseconds){
           self ! FinCargaDescarga
         }
       case "viaje" =>
-        val rnd = (30 + r.nextInt(10)) / fdv
+        val rnd = (3600*5 + r.nextInt(3600*4))*1000 / fdv
+        //1hour = 3600seconds
         log.debug(s"    [Tren $tren_id] random number viaje $rnd")
-        context.system.scheduler.scheduleOnce(rnd.seconds){
+        context.system.scheduler.scheduleOnce(rnd.milliseconds){
           self ! FinViaje
         }
       case "esperaInicioViaje" =>
-        val rnd = (5 + r.nextInt(5))/ fdv
+        val rnd = (3600 + r.nextInt(3600*2))*1000 / fdv
+        //1hour = 3600seconds
         log.debug(s"    [Tren $tren_id] random number espera inicio viaje $rnd")
-        context.system.scheduler.scheduleOnce(rnd.seconds){
+        context.system.scheduler.scheduleOnce(rnd.milliseconds){
           self ! InicioViaje
         }
       case "esperaDescargaPaquetes" =>
-        val rnd = (5 + r.nextInt(5)) / fdv
+        val rnd = (3600 + r.nextInt(3600*2))*1000 / fdv
+        //1hour = 3600seconds
         log.debug(s"    [Tren $tren_id] random number espera descarga $rnd")
-        context.system.scheduler.scheduleOnce(rnd.seconds){
+        context.system.scheduler.scheduleOnce(rnd.milliseconds){
           self ! InicioDescarga
         }
       case "entregaAlmacen" =>
-        val rnd = (5 + r.nextInt(5)) / fdv
+        val rnd = (3600 + r.nextInt(3600*2))*1000 / fdv
+        //1hour = 3600seconds
         log.debug(s"    [Tren $tren_id] random number entrega almacen $rnd")
-        context.system.scheduler.scheduleOnce(rnd.seconds){
+        context.system.scheduler.scheduleOnce(rnd.milliseconds){
           self ! EntregarAlmacen
         }
     }
   }
 
-  /*
-  def localizacionDestinoAleatorio(localizacionOrigen: Localizacion): Localizacion = {
-    var str = ""
-    do {
-      val r = new Random()
-      val rnd = 1 + r.nextInt(5)
-      rnd match {
-        case 1 => str = "Madrid"
-        case 2 => str = "Valencia"
-        case 3 => str = "Barcelona"
-        case 4 => str = "Zaragoza"
-        case 5 => str = "Sevilla"
-      }
-    } while (localizacionOrigen.name == str)
-    Localizacion(1, str)
-  }
-   */
-
   override def receive: Receive =  {
-    case IniciarTren(id,capacidad,ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef) =>
+    case IniciarTren(id,capacidad,ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef, producerRef) =>
       val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"    [Tren $id] Iniciado en ${ruta.head.name} con una capacidad maxima de $capacidad paquetes, Fecha y hora: $dtEvento")
+      producer = producerRef
       scheduleTren = intervaloTiempoTren("recibirPaquetes",id, capacidad, ruta, fdv, fabMasterRef)
       context.become(enOrigen(id, Seq[Paquete](), capacidad, ruta.head, ruta(1), ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
@@ -105,6 +95,9 @@ class Tren extends Actor with ActorLogging {
       val nuevaListaPaquetesTren = listaPaquetesTren ++ listaPaquetes
       val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"    [Tren $id] Evento: INICIO CARGA DEL TREN, Salida de paquetes: ${nuevaListaPaquetesTren.map(p => p.id)}, Origen: ${localizacionOrigen.name}, Destino: ${localizacionDestino.name}, Fecha y hora: $dtEvento")
+      nuevaListaPaquetesTren.foreach(p =>
+        producer ! f"""{"package_id": ${p.id} , "priority": ${p.prioridad} , "client": "${p.cliente.name}", "event_type": "START OF TRAIN LOADING", "event_location": "${localizacionOrigen.name}", "date": "$dtEvento", "train_origin": "${localizacionOrigen.name}", "train_id": $id, "train_destination": "${localizacionDestino.name}"}"""
+      )
       scheduleTren = intervaloTiempoTren("cargarDescargarPaquetes",id, capacidad, ruta, fdv, fabMasterRef)
       context.become(enCarga(id, capacidad, nuevaListaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
@@ -114,6 +107,9 @@ class Tren extends Actor with ActorLogging {
       scheduleTren.cancel()
       val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"    [Tren $id] Evento: FIN CARGA, Fecha y hora: $dtEvento")
+      listaPaquetesTren.foreach(p =>
+        producer ! f"""{"package_id": ${p.id}, "priority": ${p.prioridad}, "client": "${p.cliente.name}", "event_type": "END OF TRAIN LOADING", "event_location": "${localizacionOrigen.name}", "date": "$dtEvento", "train_origin": "${localizacionOrigen.name}", "train_id": $id, "train_destination": "${localizacionDestino.name}"}"""
+      )
       scheduleTren = intervaloTiempoTren("esperaInicioViaje",id, capacidad, ruta, fdv, fabMasterRef)
       context.become(enEsperaInicioViaje(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
 
@@ -124,6 +120,9 @@ class Tren extends Actor with ActorLogging {
       scheduleTren.cancel()
       val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"    [Tren $id] Evento: SALIDA DESDE EL ORIGEN, Fecha y hora: $dtEvento")
+      listaPaquetesTren.foreach(p =>
+        producer ! f"""{"package_id": ${p.id}, "priority": ${p.prioridad}, "client": "${p.cliente.name}", "event_type": "TRAIN DEPARTURE FROM ORIGIN", "event_location": "${localizacionOrigen.name}", "date": "$dtEvento", "train_origin": "${localizacionOrigen.name}", "train_id": $id, "train_destination": "${localizacionDestino.name}"}"""
+      )
       scheduleTren = intervaloTiempoTren("viaje",id, capacidad, ruta, fdv, fabMasterRef)
       context.become(enViaje(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
@@ -133,6 +132,9 @@ class Tren extends Actor with ActorLogging {
       scheduleTren.cancel()
       val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"    [Tren $id] Evento: LLEGADA A DESTINO, Fecha y hora: $dtEvento")
+      listaPaquetesTren.foreach(p =>
+        producer ! f"""{"package_id": ${p.id}, "priority": ${p.prioridad}, "client": "${p.cliente.name}", "event_type": "TRAIN ARRIVAL AT DESTINATION", "event_location": "${localizacionDestino.name}", "date": "$dtEvento", "train_origin": "${localizacionOrigen.name}", "train_id": $id, "train_destination": "${localizacionDestino.name}"}"""
+      )
       scheduleTren = intervaloTiempoTren("esperaDescargaPaquetes",id, capacidad, ruta, fdv, fabMasterRef)
       context.become(enDestinoSinDescarga(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
@@ -142,6 +144,9 @@ class Tren extends Actor with ActorLogging {
       scheduleTren.cancel()
       val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"    [Tren $id] Evento: INICIO DESCARGA, Fecha y hora: $dtEvento")
+      listaPaquetesTren.foreach(p =>
+        producer ! f"""{"package_id": ${p.id}, "priority": ${p.prioridad}, "client": "${p.cliente.name}", "event_type": "START OF TRAIN UNLOADING", "event_location": "${localizacionDestino.name}", "date": "$dtEvento", "train_origin": "${localizacionOrigen.name}", "train_id": $id, "train_destination": "${localizacionDestino.name}"}"""
+      )
       scheduleTren = intervaloTiempoTren("cargarDescargarPaquetes",id, capacidad, ruta, fdv, fabMasterRef)
       context.become(enDescarga(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
@@ -151,6 +156,9 @@ class Tren extends Actor with ActorLogging {
       scheduleTren.cancel()
       val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"    [Tren $id] Evento: FIN DESCARGA, Fecha y hora: $dtEvento")
+      listaPaquetesTren.foreach(p =>
+        producer ! f"""{"package_id": ${p.id}, "priority": ${p.prioridad}, "client": "${p.cliente.name}", "event_type": "END OF TRAIN UNLOADING", "event_location": "${localizacionDestino.name}", "date": "$dtEvento", "train_origin": "${localizacionOrigen.name}", "train_id": $id, "train_destination": "${localizacionDestino.name}"}"""
+      )
       scheduleTren = intervaloTiempoTren("entregaAlmacen",id, capacidad, ruta, fdv, fabMasterRef)
       context.become(enDestino(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }

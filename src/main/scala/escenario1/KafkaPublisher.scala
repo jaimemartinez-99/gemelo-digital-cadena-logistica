@@ -1,4 +1,4 @@
-package akkaKafkaKibana
+package escenario1
 
 import akka.actor.{Actor, ActorSystem}
 import akka.kafka.ProducerSettings

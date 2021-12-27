@@ -1,6 +1,6 @@
 package escenario1
 
-import akka.actor.{Actor, ActorLogging, Cancellable}
+import akka.actor.{Actor, ActorLogging, ActorRef, Cancellable}
 import com.github.nscala_time.time.Imports.{richReadableInstant, richReadableInterval}
 import escenario1.Basico.{Cliente, Localizacion, Paquete}
 import escenario1.App.system
@@ -15,7 +15,7 @@ import scala.util.control.Breaks.{break, breakable}
  */
 
 object Fabrica {
-  case class  ResetearFabrica(id: Int, localizacion: Localizacion, fdv: Int, dtI: DateTime, dt0: DateTime, clientes: Seq[Cliente], localizaciones: Seq[Localizacion])
+  case class  ResetearFabrica(id: Int, localizacion: Localizacion, fdv: Int, dtI: DateTime, dt0: DateTime, clientes: Seq[Cliente], localizaciones: Seq[Localizacion], producerRef: ActorRef)
   case object CrearPaquete
   case class  SalidaPaquetes (capacidadTren: Int, ruta: Seq[Localizacion])
 }
@@ -26,13 +26,15 @@ class Fabrica extends Actor with ActorLogging {
   import system.dispatcher
 
   var schedule: Cancellable = _
+  var producer: ActorRef = _
 
   def intervaloTiempoGenerarPaquete(id: Int, fdv: Int): Cancellable = {
     val r = new Random()
-    val rnd = (6 + r.nextInt(2) ) / fdv
+    val rnd = (3600 + r.nextInt(3600*4))*1000 / fdv
+    //1hour = 3600seconds
     log.debug(s"[Fabrica $id] random number generar $rnd")
-    context.system.scheduler.scheduleOnce(rnd.seconds){
-      self ! CrearPaquete
+    context.system.scheduler.scheduleOnce(rnd.milliseconds){
+        self ! CrearPaquete
     }
   }
 
@@ -80,23 +82,15 @@ class Fabrica extends Actor with ActorLogging {
       val rnd = r.nextInt(localizaciones.size)
       str = localizaciones(rnd).name
       id = localizaciones(rnd).id
-      /*
-      rnd match {
-        case 1 => str = "Madrid"
-        case 2 => str = "Valencia"
-        case 3 => str = "Barcelona"
-        case 4 => str = "Zaragoza"
-        case 5 => str = "Sevilla"
-      }
-       */
     } while (localizacionOrigen.name == str)
     Localizacion(id,str)
   }
 
   override def receive: Receive = {
-    case ResetearFabrica (id, localizacion, fdv, dtI, dt0, clientes, localizaciones) =>
+    case ResetearFabrica (id, localizacion, fdv, dtI, dt0, clientes, localizaciones, producerRef) =>
       val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"[Fabrica $id] Iniciada en ${localizacion.name}, Fecha y hora: $dtEvento")
+      producer = producerRef
       schedule = intervaloTiempoGenerarPaquete(id, fdv)
       context.become(iniciada(id, Seq[Paquete](), Seq[Int](), localizacion, fdv, dtI, dt0, clientes, localizaciones))
   }
@@ -109,7 +103,8 @@ class Fabrica extends Actor with ActorLogging {
       val prioridad = prioridadAleatoria() // Prioridad aleatoria
       val paquete = Paquete(paquete_id, prioridad, cliente, localizacionDestino)
       val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
-      log.debug(s"[Fabrica $id] Evento: ITEM GENERADO, Paquete(id: ${paquete.id}, prioridad: ${paquete.prioridad}, cliente: ${paquete.cliente.name}, destino final: ${paquete.localizacionDestino.name}) generado, Fecha y hora: $dtEvento")
+      log.debug(s"[Fabrica $id] Evento: PAQUETE GENERADO, Paquete(id: ${paquete.id}, prioridad: ${paquete.prioridad}, cliente: ${paquete.cliente.name}, destino final: ${paquete.localizacionDestino.name}) generado, Fecha y hora: $dtEvento")
+      producer ! f"""{"source":"F$id", "event": "PACKAGE CREATED", "dateEventAtFactory": "$dtEvento", "nPackages": ${listaPaquetes.size}}"""
       val nuevaListaTodosIdPaquetes = listaTodosIdPaquetes :+ paquete.id
       val nuevaListaPaquetes = listaPaquetes :+ paquete
       schedule.cancel()
