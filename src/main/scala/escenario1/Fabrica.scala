@@ -97,7 +97,7 @@ class Fabrica extends Actor with ActorLogging {
 
   def iniciada(id: Int, listaPaquetes: Seq[Paquete], listaTodosIdPaquetes: Seq[Int], localizacion: Localizacion, fdv: Int, dtI: DateTime, dt0: DateTime, clientes: Seq[Cliente], localizaciones: Seq[Localizacion]): Receive = {
     case CrearPaquete =>
-      val paquete_id = listaTodosIdPaquetes.size + 1
+      val paquete_id = (listaTodosIdPaquetes.size + 1) + id*10000
       val cliente = clienteAleatorio(clientes)  // Cliente aleatorio
       val localizacionDestino = localizacionDestinoAleatorio(localizacion, localizaciones) // Destino final aleatorio
       val prioridad = prioridadAleatoria() // Prioridad aleatoria

@@ -8,7 +8,7 @@ object App extends App {
   import SistemaMaster._
 
   // Parametros del fichero de configuración
-  val parametros = ConfigFactory.load("application.conf")
+  val parametros = ConfigFactory.load("applicationEscComp.conf")
 
   // Creacion del sistema
   val system = ActorSystem(s"${parametros.getString("nombreSistema")}")

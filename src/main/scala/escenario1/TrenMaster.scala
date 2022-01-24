@@ -19,7 +19,7 @@ class TrenMaster extends Actor with ActorLogging {
       val referencias = for (i <- 1 to rutas.size) yield context.actorOf(Props[Tren], s"tren_$i")
       var trenes = Seq[AtributosTrenes]()
       for (i <- referencias.indices) {
-        trenes = trenes :+ AtributosTrenes(referencias(i), i+1+10, capacidades(i), rutas(i))
+        trenes = trenes :+ AtributosTrenes(referencias(i), i+1, capacidades(i), rutas(i))
         trenes(i).ref ! IniciarTren(trenes(i).id, trenes(i).capacidad, trenes(i).ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef, producerRef)
       }
   }

@@ -20,7 +20,7 @@ class AlmacenMaster extends Actor with ActorLogging {
       val referencias = for (i <- 1 to localizaciones.size) yield context.actorOf(Props[Almacen], s"almacen_$i")
       var almacenes = Seq[AtributosAlmacen]()
       for (i <- referencias.indices) {
-        almacenes = almacenes :+ AtributosAlmacen(referencias(i), i+1+10, localizaciones(i))
+        almacenes = almacenes :+ AtributosAlmacen(referencias(i), i+1, localizaciones(i))
         almacenes(i).ref ! ResetearAlmacen(almacenes(i).id, almacenes(i).localizacion, fdv, dtI, dt0)
       }
       context.become(iniciado(almacenes))

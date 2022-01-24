@@ -21,7 +21,7 @@ class FabricaMaster extends Actor with ActorLogging {
       val referencias = for (i <- 1 to locsFabrica.size) yield context.actorOf(Props[Fabrica], s"fabrica_$i")
       var fabricas = Seq[AtributosFabrica]()
       for (i <- referencias.indices) {
-        fabricas = fabricas :+ AtributosFabrica(referencias(i), i+1+10, locsFabrica(i))
+        fabricas = fabricas :+ AtributosFabrica(referencias(i), i+1, locsFabrica(i))
         fabricas(i).ref ! ResetearFabrica(fabricas(i).id, fabricas(i).localizacion, fdv, dtI, dt0, clientes, localizaciones, producerRef)
       }
       context.become(iniciado(fabricas))
