@@ -7,6 +7,10 @@ import com.typesafe.config.Config
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.StringSerializer
 
+/**
+ * @author José Antonio Antona Díaz
+ */
+
 class KafkaPublisher extends Actor {
   implicit val sys: ActorSystem = context.system
   val config: Config = context.system.settings.config.getConfig("akka.kafka.producer")

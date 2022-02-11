@@ -7,11 +7,15 @@ import escenario1.Basico.Localizacion
 import escenario1.Basico.Cliente
 import org.joda.time.DateTime
 
+/**
+ * @author José Antonio Antona Díaz
+ */
+
 object SistemaMaster {
   case class IniciarSistemaMaster(parametros: Config)
 }
 
-class  SistemaMaster extends Actor with ActorLogging {
+class SistemaMaster extends Actor with ActorLogging {
   import SistemaMaster._
   import AlmacenMaster._
   import TrenMaster._
@@ -21,13 +25,13 @@ class  SistemaMaster extends Actor with ActorLogging {
     case IniciarSistemaMaster(parametros) =>
       log.debug(s"[SistemaMaster] Iniciando el sistema")
 
-      // Creacion de los actores principales
+      // Creacion de los actores master
       val fabricaMaster = context.actorOf(Props[FabricaMaster], s"${parametros.getString("nombreFabricaMaster")}")
       val trenMaster = context.actorOf(Props[TrenMaster], s"${parametros.getString("nombreTrenMaster")}")
       val almacenMaster = context.actorOf(Props[AlmacenMaster], s"${parametros.getString("nombreAlmacenMaster")}")
       val producer = context.actorOf(Props[KafkaPublisher], "kafka_producer")
 
-      // Inicializacion de las localizaciones, rutas y actores principales
+      // Inicializacion de las localizaciones, rutas, capacidades y clientes
       val nombresLocalizaciones = parametros.getStringList("localizaciones").toArray.toList //application.conf
       val locsNombreFabrica = parametros.getStringList("locsFabrica").toArray.toList
       val locsNombreAlmacen = parametros.getStringList("locsFabrica").toArray.toList
@@ -74,7 +78,7 @@ class  SistemaMaster extends Actor with ActorLogging {
         clientes = clientes :+ Cliente(i+1, s"${nombresClientes(i)}")
       }
 
-      // Initial DateTime
+      // DateTime inicial
       val initialDT = new DateTime(
         parametros.getInt("dateTime.year"),
         parametros.getInt("dateTime.month"),
@@ -85,8 +89,10 @@ class  SistemaMaster extends Actor with ActorLogging {
         DateTimeZone.forOffsetHours(parametros.getInt("dateTime.dateTimeZone"))
       )
 
+      // DateTime actual
       val actualDT = DateTime.now
 
+      // Notificación para la creación de los actores fábrica, tren y almacén que componen el escenario
       fabricaMaster ! IniciarFabricaMaster(locsFabrica, factorVelocidad, initialDT, actualDT, clientes, localizaciones, producer)
       trenMaster ! IniciarTrenMaster(rutas, capacidadesTrenes, factorVelocidad, initialDT, actualDT, fabricaMaster, almacenMaster, producer)
       almacenMaster ! IniciarAlmacenMaster(locsAlmacen, factorVelocidad, initialDT, actualDT)

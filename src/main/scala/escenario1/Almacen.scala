@@ -6,7 +6,7 @@ import escenario1.Basico.{Localizacion, Paquete}
 import org.joda.time.DateTime
 
 /**
- * Almacen
+ * @author José Antonio Antona Díaz
  */
 
 object Almacen {

@@ -1,5 +1,9 @@
 package escenario1
 
+/**
+ * @author José Antonio Antona Díaz
+ */
+
 object Basico {
 
   // Paquete

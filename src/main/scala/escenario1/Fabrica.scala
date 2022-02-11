@@ -11,7 +11,7 @@ import scala.concurrent.duration._
 import scala.util.control.Breaks.{break, breakable}
 
 /**
- * Fabrica
+ * @author José Antonio Antona Díaz
  */
 
 object Fabrica {
@@ -45,7 +45,7 @@ class Fabrica extends Actor with ActorLogging {
     breakable {
       for(j <- 1 to 3) {
         for(locDestino <- ruta.tail){
-          // Compruebo que la lista nueva no supere la capacidad y que se recorre toda la lista vieja
+          // Compruebo que la lista nueva no supere la capacidad y que recorre toda la lista vieja
           while (listaNueva.size < capacidad && i < listaVieja.size) {
             if (listaVieja(i).localizacionDestino == locDestino && listaVieja(i).prioridad == j) {
               listaNueva = listaNueva :+ listaVieja(i)

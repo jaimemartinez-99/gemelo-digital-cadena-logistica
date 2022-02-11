@@ -10,7 +10,7 @@ import scala.concurrent.duration._
 import scala.util.Random
 
 /**
- * Tren
+ * @author José Antonio Antona Díaz
  */
 
 object Tren {
