@@ -1,12 +1,15 @@
 package escenario1
 
-import akka.actor.{Actor, ActorLogging, ActorRef, Cancellable}
+import akka.actor.{Actor, ActorLogging, ActorRef, Cancellable, Props}
 import com.github.nscala_time.time.Imports.{richReadableInstant, richReadableInterval}
 import escenario1.Basico.{Localizacion, Paquete}
 import escenario1.App.system
 import org.joda.time.DateTime
+import play.api.libs.json.JsValue.jsValueToJsLookup
+import play.api.libs.json._
 
 import scala.concurrent.duration._
+import scala.language.postfixOps
 import scala.util.Random
 
 /**
@@ -18,6 +21,7 @@ object Tren {
   case class  RecibirPaquetes (listaPaquetes: Seq[Paquete])
   case object FinCargaDescarga
   case object InicioViaje
+  case object LocalizacionActual
   case object FinViaje
   case object InicioDescarga
   case object EntregarAlmacen
@@ -31,31 +35,49 @@ class Tren extends Actor with ActorLogging {
 
   var scheduleTren: Cancellable = _
   var producer: ActorRef = _
+  var periodicScheduler: ActorRef = context.system.actorOf(Props[Tren])
 
   def intervaloTiempoTren(evento: String, tren_id: Int, capacidad: Int, ruta: Seq[Localizacion], fdv: Int, fabMasterRef: ActorRef): Cancellable = {
     val r = new Random()
     evento match {
       case "recibirPaquetes" =>
-        val rnd = (86400 + r.nextInt(86400*5))*1000 / fdv
+        val rnd = (86400 + r.nextInt(86400 * 5)) * 1000 / fdv
         //1day = 86400seconds
         log.debug(s"    [Tren $tren_id] random number recibir $rnd")
-        context.system.scheduler.scheduleOnce(rnd.milliseconds){
+        context.system.scheduler.scheduleOnce(rnd.milliseconds) {
           fabMasterRef ! SalidaPaquetesMaster(capacidad, ruta)
         }
       case "cargarDescargarPaquetes" =>
-        val rnd = (3600*2 + r.nextInt(3600*6))*1000 / fdv
+        val rnd = (3600 * 2 + r.nextInt(3600 * 6)) * 1000 / fdv
         //1hour = 3600seconds
         log.debug(s"    [Tren $tren_id] random number cargar/descargar $rnd")
-        context.system.scheduler.scheduleOnce(rnd.milliseconds){
+        context.system.scheduler.scheduleOnce(rnd.milliseconds) {
           self ! FinCargaDescarga
         }
       case "viaje" =>
-        val rnd = (3600*5 + r.nextInt(3600*4))*1000 / fdv
-        //1hour = 3600seconds
+        val rnd = (3600 * 5 + r.nextInt(3600 * 4)) * 1000 / fdv ////1hour = 3600seconds
+
+        //Variable con el tiempo de aparición de logs periodicos para marcar lugar actual del tren en el trayecto
+        val logTime = (60 * 5 * 1000) / fdv ////5 minutos
+
+        //Get al servidor OSRM para obtener la ruta del tren
+        val simpleRequest = requests.get("https://jsonplaceholder.typicode.com/posts/1").text()
+
+        //Convertir respuesta del GET.text(), en formato string, a JSON para poder acceder a sus valores
+        val jsonRequest: JsValue = Json.parse(s"""
+          $simpleRequest
+          """)
+        val stringValue: String = (jsonRequest \ "title").as[JsString].value
+
+        //Variable que inicia el scheduler periodico para marcar la posicion del tren
+        val periodicRoutine: Cancellable = context.system.scheduler.scheduleWithFixedDelay(logTime milliseconds, logTime milliseconds , periodicScheduler, LocalizacionActual)
         log.debug(s"    [Tren $tren_id] random number viaje $rnd")
-        context.system.scheduler.scheduleOnce(rnd.milliseconds){
+        context.system.scheduler.scheduleOnce(rnd.milliseconds) {
+          log.debug(s"PRUEBA ACCESO JSON: $stringValue") // Prueba de acceso a uno de los valores del JSON
+          periodicRoutine.cancel()
           self ! FinViaje
         }
+
       case "esperaInicioViaje" =>
         val rnd = (3600 + r.nextInt(3600*2))*1000 / fdv
         //1hour = 3600seconds
@@ -87,6 +109,8 @@ class Tren extends Actor with ActorLogging {
       producer = producerRef
       scheduleTren = intervaloTiempoTren("recibirPaquetes",id, capacidad, ruta, fdv, fabMasterRef)
       context.become(enOrigen(id, Seq[Paquete](), capacidad, ruta.head, ruta(1), ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
+    case LocalizacionActual =>
+      log.debug("MENSAJE DE PRUEBA PROGRAMACION PERIODICA DE MENSAJES")
   }
 
   def enOrigen(id: Int, listaPaquetesTren: Seq[Paquete], capacidad: Int, localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef): Receive = {
@@ -184,4 +208,5 @@ class Tren extends Actor with ActorLogging {
       context.become(enOrigen(id, nuevaListaPaquetesTren, capacidad, nuevaRuta.head, nuevaRuta(1), nuevaRuta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
 }
+
 

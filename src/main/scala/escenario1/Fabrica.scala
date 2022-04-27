@@ -3,7 +3,7 @@ package escenario1
 import akka.actor.{Actor, ActorLogging, ActorRef, Cancellable}
 import com.github.nscala_time.time.Imports.{richReadableInstant, richReadableInterval}
 import escenario1.Basico.{Cliente, Localizacion, Paquete}
-import escenario1.App.system
+import escenario1.App.{sistemaMaster, system}
 import org.joda.time.DateTime
 
 import scala.util.Random
@@ -32,6 +32,7 @@ class Fabrica extends Actor with ActorLogging {
     val r = new Random()
     val rnd = (3600 + r.nextInt(3600*4))*1000 / fdv
     //1hour = 3600seconds
+
     log.debug(s"[Fabrica $id] random number generar $rnd")
     context.system.scheduler.scheduleOnce(rnd.milliseconds){
         self ! CrearPaquete
@@ -115,6 +116,7 @@ class Fabrica extends Actor with ActorLogging {
       val listaSalidaPaquetes = take(listaPaquetes, capacidadTren, ruta)
       val listaPaquetesRestantes = listaPaquetes.diff(listaSalidaPaquetes)
       val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
+
       log.debug(s"[Fabrica $id] ${listaPaquetesRestantes.map(p => p.id)} restantes, Fecha y hora: $dtEvento")
       sender() ! RecibirPaquetes(listaSalidaPaquetes)
       context.become(iniciada(id, listaPaquetesRestantes, listaTodosIdPaquetes,localizacion, fdv, dtI, dt0, clientes, localizaciones))
