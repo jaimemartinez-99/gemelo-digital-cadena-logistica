@@ -35,7 +35,6 @@ class Tren extends Actor with ActorLogging {
 
   var scheduleTren: Cancellable = _
   var producer: ActorRef = _
-  var periodicScheduler: ActorRef = context.system.actorOf(Props[Tren])
 
   def intervaloTiempoTren(evento: String, tren_id: Int, capacidad: Int, ruta: Seq[Localizacion], fdv: Int, fabMasterRef: ActorRef): Cancellable = {
     val r = new Random()
@@ -69,15 +68,15 @@ class Tren extends Actor with ActorLogging {
           """)
         val stringValue: String = (jsonRequest \ "title").as[JsString].value
 
-        //Variable que inicia el scheduler periodico para marcar la posicion del tren
-        val periodicRoutine: Cancellable = context.system.scheduler.scheduleWithFixedDelay(logTime milliseconds, logTime milliseconds , periodicScheduler, LocalizacionActual)
+        //Variable que inicia el scheduler periodico para indicar la posicion actual del tren
+        val periodicRoutine: Cancellable = context.system.scheduler.scheduleWithFixedDelay(logTime milliseconds, logTime milliseconds , self, LocalizacionActual)
+
         log.debug(s"    [Tren $tren_id] random number viaje $rnd")
         context.system.scheduler.scheduleOnce(rnd.milliseconds) {
           log.debug(s"PRUEBA ACCESO JSON: $stringValue") // Prueba de acceso a uno de los valores del JSON
           periodicRoutine.cancel()
           self ! FinViaje
         }
-
       case "esperaInicioViaje" =>
         val rnd = (3600 + r.nextInt(3600*2))*1000 / fdv
         //1hour = 3600seconds
@@ -109,8 +108,6 @@ class Tren extends Actor with ActorLogging {
       producer = producerRef
       scheduleTren = intervaloTiempoTren("recibirPaquetes",id, capacidad, ruta, fdv, fabMasterRef)
       context.become(enOrigen(id, Seq[Paquete](), capacidad, ruta.head, ruta(1), ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
-    case LocalizacionActual =>
-      log.debug("MENSAJE DE PRUEBA PROGRAMACION PERIODICA DE MENSAJES")
   }
 
   def enOrigen(id: Int, listaPaquetesTren: Seq[Paquete], capacidad: Int, localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef): Receive = {
@@ -136,7 +133,6 @@ class Tren extends Actor with ActorLogging {
       )
       scheduleTren = intervaloTiempoTren("esperaInicioViaje",id, capacidad, ruta, fdv, fabMasterRef)
       context.become(enEsperaInicioViaje(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
-
   }
 
   def enEsperaInicioViaje(id: Int, capacidad: Int, listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef): Receive = {
@@ -161,6 +157,8 @@ class Tren extends Actor with ActorLogging {
       )
       scheduleTren = intervaloTiempoTren("esperaDescargaPaquetes",id, capacidad, ruta, fdv, fabMasterRef)
       context.become(enDestinoSinDescarga(id, capacidad, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
+    case LocalizacionActual =>
+      log.debug("MENSAJE DE PRUEBA PROGRAMACION PERIODICA DE MENSAJES")
   }
 
   def enDestinoSinDescarga(id: Int, capacidad: Int, listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef): Receive =  {
