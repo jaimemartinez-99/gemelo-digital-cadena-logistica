@@ -15,4 +15,6 @@ object Basico {
   // Localizacion
   case class Localizacion (id: Int, name: String)
 
+  // Estacion
+  case class Estacion (id: Int, ciudad: String, nombreEstacion: String, longitud: String, latitud: String)
 }
