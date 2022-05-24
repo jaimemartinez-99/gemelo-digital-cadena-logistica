@@ -6,6 +6,7 @@ import org.joda.time.DateTime
 
 /**
  * @author José Antonio Antona Díaz
+ * @author Mario Esperalta Delgado
  */
 
 object TrenMaster {

@@ -16,6 +16,7 @@ import scala.util.control.Breaks.{break, breakable}
 
 /**
  * @author José Antonio Antona Díaz
+ * @author Mario Esperalta Delgado
  */
 
 object Tren {
@@ -65,43 +66,56 @@ class Tren extends Actor with ActorLogging {
           """)
         //Se obtiene el valor del campo "duration" con la duracion del viaje, se pasa a valor numérico (segundos) y se transforma en horas, minutos y segundos
         val duracionViajeJsValue = (((jsonViaje \ "routes") (0) \ "legs") (0) \ "duration").get
-        val duracionViaje = (s"$duracionViajeJsValue".toDouble * 1000 / fdv).round
-        val segundosRealesViaje = (s"$duracionViajeJsValue".toDouble % 60).round.toInt
-        val minutosRealesViaje = ((math floor s"$duracionViajeJsValue".toDouble / 60) % 60).toInt
-        val horasRealesViaje = (math floor s"$duracionViajeJsValue".toDouble / 3600).toInt
+        val duracionViajeReal = s"$duracionViajeJsValue".toDouble
+        val duracionViaje = duracionViajeReal * 1000 / fdv.toDouble
+        val segundosRealesViaje = (duracionViajeReal % 60).round.toInt
+        val minutosRealesViaje = ((math floor duracionViajeReal / 60) % 60).toInt
+        val horasRealesViaje = (math floor duracionViajeReal / 3600).toInt
 
         //Tiempo de aparición de logs periódicos para marcar posición actual del tren en el trayecto
         val tiempoLogSegundos = 60 * 5 ////5 minutos
-        val tiempoLog = (60 * 5 * 1000) / fdv
+        val tiempoLog = (tiempoLogSegundos.toDouble * 1000) / fdv.toDouble
 
-        //Nombre de la localización actual del tren en el trayecto
+        //Nombre y coordenadas de la localización actual del tren en el trayecto
         //
-        //Petición get al servidor para obtener la ruta con otros valores como las maniobras realizadas durante el viaje, la  duración del viaje entre ellas y el nombre de las vías por las que pasa el tren
-        val peticionViajeCompleto = requests.get("http://127.0.0.1:5000/route/v1/driving/" + coordenadasOrigen(2) + "," + coordenadasOrigen(3) + ";" + coordenadasDestino(2) + "," + coordenadasDestino(3) + "?steps=true").text()
+        //Petición GET al servidor para obtener la ruta con otros valores:  coordenadas registrables con conforman el trayecto, maniobras realizadas durante el viaje, duración del trayecto que hay entre ellas, el nombre de las vías por las que pasa el tren
+        val peticionViajeCompleto = requests.get("http://127.0.0.1:5000/route/v1/driving/" + coordenadasOrigen(2) + "," + coordenadasOrigen(3) + ";" + coordenadasDestino(2) + "," + coordenadasDestino(3) + "?overview=full&geometries=geojson&steps=true").text()
         val jsonViajeCompleto: JsValue = Json.parse(
           s"""
           $peticionViajeCompleto
           """)
-        //El nombre de la vía se obtiene del nombre del lugar en el que se realizan las maniobras del trayecto
-        //Se crea una lista con la duración acumulativa que hay desde el origen hasta cada maniobra realizada
+        //Lista con todas las coordenadas registrables por las que pasa el tren durante el trayecto. Comienza con la siguiente a la del origen y acaba en la de destino.
+        val coordenadasViajeTren = ((jsonViajeCompleto \ "routes") (0) \ "geometry" \ "coordinates").get.as[List[List[Double]]]
+        //Tiempo que hay entre cada coordenadas registrable en el viaje. Como en el perfil de trenes para OSRM el tren va a velocidad constante, el tiempo entre coordenadas también lo será
+        val tiempoViajeEntreCoordenadas = BigDecimal(duracionViajeReal/coordenadasViajeTren.size).toDouble
+        //Lista con la duración que hay entre el inicio y cada coordenada del viaje
+        var tACoordenada: List[Double] = List(tiempoViajeEntreCoordenadas)
+        for (i <- 2 to coordenadasViajeTren.size) {
+          tACoordenada = tACoordenada.+:(tiempoViajeEntreCoordenadas*i)
+        }
+        val tiempoACoordenada = tACoordenada.reverse
+        //El nombre de la vía por la que pasa el tren se obtiene del nombre del lugar en el que se realizan las maniobras del trayecto
+        //Lista con la duración acumulativa que hay desde el origen hasta cada maniobra realizada
         val duracionManiobrasJsValue = (jsonViajeCompleto \\ "duration").toList
-        val (duracionManiobrasJsValueLimpio, z) = duracionManiobrasJsValue.splitAt(duracionManiobrasJsValue.size - 2)
-        val duracionManiobras: List[Double] = duracionManiobrasJsValueLimpio.map(duracion => s"$duracion".toDouble)
-        var acDuracionManiobras: List[Double] = List(0)
+        val (duracionManiobrasJsValueLimpio, _) = duracionManiobrasJsValue.splitAt(duracionManiobrasJsValue.size - 2)
+        val duracionManiobras: List[Double] = duracionManiobrasJsValueLimpio.map(duracion => BigDecimal(s"$duracion").toDouble)
+        var acDuracionManiobras: List[Double] = List(duracionManiobras.head)
         var acumulacion: Double = 0.0
-        for (i <- 0 to (duracionManiobras.size - 1)) {
+        for (i <- 1 until duracionManiobras.size) {
           acumulacion = acumulacion + duracionManiobras(i)
           acDuracionManiobras = acDuracionManiobras.+:(acumulacion)
         }
-        val acumDuracionManiobras = acDuracionManiobras.reverse.map(double => BigDecimal(double).setScale(1, BigDecimal.RoundingMode.HALF_UP).toDouble).tail
+        val acumDuracionManiobras = acDuracionManiobras.reverse.map(double => BigDecimal(double).toDouble)
         //Se crea una lista con los índices de la lista de maniobras cuya duración desde el origen a esa maniobra se acerque más al tiempo de los logs periódicos.
         //El tamaño de la lista es la cantidad de logs que se harían durante el viaje
+        //Además, se crea otra lista de las mismas características con los índices de la lista de tiempos a cada coordenada
         var indManiobras: List[Int] = List(0)
+        var indCoordenada: List[Int] = List(0)
         for (i <- 1 to (duracionViaje / tiempoLog).toInt) {
           breakable {
-            for (j <- 0 until acumDuracionManiobras.size) {
+            for (j <- acumDuracionManiobras.indices) {
               if (acumDuracionManiobras(j) == tiempoLogSegundos * i) {
-                indManiobras = indManiobras.+:(j + 1)
+                indManiobras = indManiobras.+:(j)
                 break()
               }
               else if (acumDuracionManiobras(j) > tiempoLogSegundos * i) {
@@ -110,31 +124,45 @@ class Tren extends Actor with ActorLogging {
               }
             }
           }
+          breakable {
+            for (j <- tiempoACoordenada.indices) {
+              if (tiempoACoordenada(j) == tiempoLogSegundos * i) {
+                indCoordenada = indCoordenada.+:(j)
+                break()
+              }
+              else if (tiempoACoordenada(j) > tiempoLogSegundos * i) {
+                indCoordenada = indCoordenada.+:(j)
+                break()
+              }
+            }
+          }
         }
         val indicesManiobras = indManiobras.reverse.tail
+        val indicesCoordenadas = indCoordenada.reverse.tail
         //Lista con el nombre de la vía donde se encuentra el lugar de la maniobra
         val nombreLocalizacionManiobras = (jsonViajeCompleto \\ "name").toList
-        val (nombreLocalizacionManiobrasLimpio, zz) = nombreLocalizacionManiobras.splitAt(nombreLocalizacionManiobras.size - 2)
+        val (nombreLocalizacionManiobrasLimpio, _) = nombreLocalizacionManiobras.splitAt(nombreLocalizacionManiobras.size - 2)
         val nombreLocManiobras: List[String] = nombreLocalizacionManiobrasLimpio.map(nombre => s"$nombre")
         //Lista con la referencia de la vía donde se encuentra el lugar de la maniobra
         //Como hay maniobras en las que no aparece esta propiedad ("ref") hay que añadírsela en blanco a cada una de ellas
         var refActual: List[String] = List("0")
-        for (i <- 0 to nombreLocManiobras.size - 1) {
+        for (i <- nombreLocManiobras.indices) {
           try {
             val referencia = ((((jsonViajeCompleto \ "routes") (0) \ "legs") (0) \ "steps") (i) \ "ref").get
             refActual = refActual.+:(s"$referencia")
           } catch {
-            case e: NoSuchElementException => refActual = refActual.+:("")
+            case _: NoSuchElementException => refActual = refActual.+:("")
           }
         }
         val referenciaActual = refActual.reverse.tail
-        //Se obtiene la lista de la localización actual del tren en la cantidad de tiempo marcada por "tiempoLog"
+        //Se obtiene la lista de la localización actual (nombre vía) del tren en la cantidad de tiempo marcada por "tiempoLog"
         //Esta lista contiene el nombre y la referencia (cuando existan) de la maniobra más cercana al tiempo del log a través de la lista "indicesManiobras"
         var locActual: List[String] = List("Inicial")
-        for (i <- 0 to indicesManiobras.size - 1) {
+        for (i <- indicesManiobras.indices) {
           if (nombreLocManiobras(indicesManiobras(i)).compareTo("") == 2) {
             if (referenciaActual(indicesManiobras(i)).compareTo("") == 0) {
               if (i != 0) locActual = locActual.+:("Referencia vía de circulación: " + referenciaActual(indicesManiobras(i - 1)))
+              else locActual = locActual.+:("No se puede referenciar el nombre de la vía")
             }
             else locActual = locActual.+:("Referencia vía de circulación: " + referenciaActual(indicesManiobras(i)))
           } else {
@@ -144,18 +172,37 @@ class Tren extends Actor with ActorLogging {
         }
         val localizacionActual = locActual.reverse.tail
 
+        println("-------------------------------------------------------------")
+        println(duracionViajeReal)
+        println(duracionViaje)
+        println(tiempoLogSegundos)
+        println(tiempoLog)
+        println(coordenadasViajeTren.size)
+        println(tiempoViajeEntreCoordenadas)
+        println(tiempoACoordenada.size)
+        println(duracionManiobrasJsValue.size)
+        println(duracionManiobrasJsValueLimpio.size)
+        println(acumDuracionManiobras.size)
+        println((duracionViaje / tiempoLog).toInt)
+        println(indicesManiobras.size)
+        println(indicesCoordenadas.size)
+        println(nombreLocalizacionManiobrasLimpio.size)
+        println(referenciaActual.size)
+        println(localizacionActual.size)
+        println("-------------------------------------------------------------")
+
         log.debug(s"    [Tren $tren_id] Tren con salida: ${coordenadasOrigen(1)}, ${coordenadasOrigen(0)}. Destino: ${coordenadasDestino(1)}, ${coordenadasDestino(0)}") //random number viaje $rnd
         log.debug(s"    [Tren $tren_id] Duración estimada del viaje: $horasRealesViaje horas, $minutosRealesViaje minutos y $segundosRealesViaje segundos")
 
         //Scheduler cada "tiempoLog" hasta el final del viaje con la posición actual del tren y el tiempo que lleva de viaje
-        for(i <- 0 to localizacionActual.size - 1) {
+        for(i <- localizacionActual.indices) {
           val minutos = (((tiempoLogSegundos*(i+1)).toDouble / 60) % 60).toInt
           val horas = (tiempoLogSegundos*(i+1).toDouble / 3600).toInt
-          if (tiempoLog*i.milliseconds < duracionViaje.milliseconds) {
+          if (tiempoLog*i < duracionViaje) {
             context.system.scheduler.scheduleOnce((tiempoLog * (i+1)).milliseconds) {
-              if (horas == 0) log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+minutos+", minutos || Posición actual --> "+localizacionActual(i))
-              if (horas == 1) log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+horas+" hora, "+minutos+": minutos || Posición actual --> "+localizacionActual(i))
-              if (horas > 1) log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+horas+" horas, "+minutos+" minutos || Posición actual --> "+localizacionActual(i))
+              if (horas == 0) log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+minutos+" minutos || Posición actual --> Longitud: "+coordenadasViajeTren(indicesCoordenadas(i)).head+", Latitud: "+coordenadasViajeTren(indicesCoordenadas(i))(1)+"; "+localizacionActual(i))
+              if (horas == 1) log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+horas+" hora, "+minutos+": minutos || Posición actual --> Longitud: "+coordenadasViajeTren(indicesCoordenadas(i)).head+", Latitud: "+coordenadasViajeTren(indicesCoordenadas(i))(1)+";  "+localizacionActual(i))
+              if (horas > 1) log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+horas+" horas, "+minutos+" minutos || Posición actual --> Longitud: "+coordenadasViajeTren(indicesCoordenadas(i)).head+", Latitud: "+coordenadasViajeTren(indicesCoordenadas(i))(1)+";  "+localizacionActual(i))
             }
           }
         }
@@ -219,10 +266,10 @@ class Tren extends Actor with ActorLogging {
         producer ! f"""{"package_id": ${p.id}, "priority": ${p.prioridad}, "client": "${p.cliente.name}", "event_type": "END OF TRAIN LOADING", "event_location": "${localizacionOrigen.name}", "date": "$dtEvento", "train_origin": "${localizacionOrigen.name}", "train_id": $id, "train_destination": "${localizacionDestino.name}"}"""
       )
       scheduleTren = intervaloTiempoTren("esperaInicioViaje", id, capacidad, coordenadasOrigen, coordenadasDestino, ruta, fdv, fabMasterRef)
-      context.become(enEsperaInicioViaje(id, capacidad, estaciones, coordenadasOrigen, coordenadasDestino, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
+      context.become(enEsperaInicioViaje(id, capacidad, estaciones, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
 
-  def enEsperaInicioViaje(id: Int, capacidad: Int, estaciones: Seq[Estacion], coordenadasOrigen: Array[String], coordenadasDestino: Array[String], listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef): Receive = {
+  def enEsperaInicioViaje(id: Int, capacidad: Int, estaciones: Seq[Estacion], listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef): Receive = {
     case InicioViaje =>
       scheduleTren.cancel()
       var coorTrenOrigen = Array("Ciudad Tren Origen", "Estacion Tren Origen", "Longitud Tren Origen","Latitud Tren Origen")
@@ -294,10 +341,10 @@ class Tren extends Actor with ActorLogging {
         producer ! f"""{"package_id": ${p.id}, "priority": ${p.prioridad}, "client": "${p.cliente.name}", "event_type": "END OF TRAIN UNLOADING", "event_location": "${localizacionDestino.name}", "date": "$dtEvento", "train_origin": "${localizacionOrigen.name}", "train_id": $id, "train_destination": "${localizacionDestino.name}"}"""
       )
       scheduleTren = intervaloTiempoTren("entregaAlmacen",id, capacidad, coordenadasOrigen, coordenadasDestino, ruta, fdv, fabMasterRef)
-      context.become(enDestino(id, capacidad, estaciones, coordenadasOrigen, coordenadasDestino, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
+      context.become(enDestino(id, capacidad, estaciones, coordenadasOrigen, coordenadasDestino, listaPaquetesTren, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
 
-  def enDestino(id: Int, capacidad: Int, estaciones: Seq[Estacion], coordenadasOrigen: Array[String], coordenadasDestino: Array[String], listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef): Receive = {
+  def enDestino(id: Int, capacidad: Int, estaciones: Seq[Estacion], coordenadasOrigen: Array[String], coordenadasDestino: Array[String], listaPaquetesTren: Seq[Paquete], localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef): Receive = {
     case EntregarAlmacen =>
       scheduleTren.cancel()
       var listaPaquetesParaAlmacen = Seq[Paquete]()
@@ -318,5 +365,3 @@ class Tren extends Actor with ActorLogging {
       context.become(enOrigen(id, nuevaListaPaquetesTren, capacidad, estaciones, coordenadasOrigen, coordenadasDestino, nuevaRuta.head, nuevaRuta(1), nuevaRuta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
 }
-
-

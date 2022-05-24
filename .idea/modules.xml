@@ -2,8 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/tfg-logistica-transporte.iml" filepath="$PROJECT_DIR$/.idea/modules/tfg-logistica-transporte.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/tfg-logistica-transporte-build.iml" filepath="$PROJECT_DIR$/.idea/modules/tfg-logistica-transporte-build.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/gemelo-digital-logistica-transporte.iml" filepath="$PROJECT_DIR$/.idea/modules/gemelo-digital-logistica-transporte.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/gemelo-digital-logistica-transporte-build.iml" filepath="$PROJECT_DIR$/.idea/modules/gemelo-digital-logistica-transporte-build.iml" />
     </modules>
   </component>
 </project>

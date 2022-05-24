@@ -1,6 +1,6 @@
-name := "tfg-logistica-transporte"
+name := "gemelo-digital-logistica-transporte"
 
-version := "0.1"
+version := "1.5"
 
 scalaVersion := "2.13.7" // 2.12.7 2.13.6
 

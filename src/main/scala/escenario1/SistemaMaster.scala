@@ -10,6 +10,7 @@ import scala.util.Try
 
 /**
  * @author José Antonio Antona Díaz
+ * @author Mario Esperalta Delgado
  */
 
 object SistemaMaster {

@@ -2,6 +2,7 @@ package escenario1
 
 /**
  * @author José Antonio Antona Díaz
+ * @author Mario Esperalta Delgado
  */
 
 object Basico {
