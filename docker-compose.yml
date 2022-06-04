@@ -45,4 +45,16 @@ services:
     environment:
       - LOGSTASH_CONF_FILENAME=logstash_kafka_input.conf
 
-
+  osrm-train:
+    command:
+      - osrm-routed
+      - --algorithm
+      - mld
+      - /data522/output/filtered.osrm
+    image: osrm/osrm-backend:v5.22.0
+    ports:
+      - 5000:5000
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./:/data522

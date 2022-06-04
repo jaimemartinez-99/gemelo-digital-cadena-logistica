@@ -8,7 +8,7 @@ import org.joda.time.DateTime
 import play.api.libs.json.JsValue.jsValueToJsLookup
 import play.api.libs.json._
 
-import java.util.NoSuchElementException
+//import java.util.NoSuchElementException
 import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.Random
@@ -57,14 +57,18 @@ class Tren extends Actor with ActorLogging {
         }
       case "viaje" =>
         //Duración del viaje
-        //Se realiza petición GET al servidor para obtener la ruta con la duración del viaje
-        val peticionViaje = requests.get("http://127.0.0.1:5000/route/v1/driving/" + coordenadasOrigen(2) + "," + coordenadasOrigen(3) + ";" + coordenadasDestino(2) + "," + coordenadasDestino(3)).text()
-        //Se parsea el resultado a formato JSON para poder acceder a sus valores
+        //Petición GET al servidor para obtener la ruta con la duración del viaje
+        val peticionViaje = requests.get("http://127.0.0.1:5000/route/v1/train/" + coordenadasOrigen(2) + "," + coordenadasOrigen(3) + ";" + coordenadasDestino(2) + "," + coordenadasDestino(3)).text()
+        //Parseo  de la respuesta de la petición a formato JSON para poder ser accesible
         val jsonViaje: JsValue = Json.parse(
           s"""
           $peticionViaje
           """)
-        //Se obtiene el valor del campo "duration" con la duracion del viaje, se pasa a valor numérico (segundos) y se transforma en horas, minutos y segundos
+        //Obtención del campo "duration" de la respuesta con la duracion del viaje
+        //Se cambia el tipo del valor de JsValue a valor numérico Double (segundos)
+        //Se transforma en horas, minutos y segundos
+        //VÁLIDO PARA VIAJES CON SOLO UNA COORDENADA DE ORIGEN Y OTRA DESTINO (Caso actual)
+        //SI LA PETICIÓN ES DE VARIAS COORDENADAS, HAY QUE OBSERVAR LA RESPUESTA DE LA PETICIÓN Y VER QUÉ CAMPO 'DURATION' ES EL DE LA DURACIÓN COMPLETA DEL VIAJE
         val duracionViajeJsValue = (((jsonViaje \ "routes") (0) \ "legs") (0) \ "duration").get
         val duracionViajeReal = s"$duracionViajeJsValue".toDouble
         val duracionViaje = duracionViajeReal * 1000 / fdv.toDouble
@@ -72,29 +76,35 @@ class Tren extends Actor with ActorLogging {
         val minutosRealesViaje = ((math floor duracionViajeReal / 60) % 60).toInt
         val horasRealesViaje = (math floor duracionViajeReal / 3600).toInt
 
-        //Tiempo de aparición de logs periódicos para marcar posición actual del tren en el trayecto
+        //Tiempo de aparición de los logs periódicos marcando la posición actual del tren
         val tiempoLogSegundos = 60 * 5 ////5 minutos
         val tiempoLog = (tiempoLogSegundos.toDouble * 1000) / fdv.toDouble
 
-        //Nombre y coordenadas de la localización actual del tren en el trayecto
+        //Coordenadas de la posición actual del tren durante el trayectode la localización actual del vehículo en el trayecto
+        //TAMBIÉN CUENTA CON EL NOMBRE DE LA VÍA DE CIRCULACIÓN ACTUAL DEL VEHÍCULO. VÁLIDO PARA TRAYECTOS INTERNACIONALES Y PARA EL PERFIL OSRM DE COCHE U OTRO DE CARRETERA. DESCOMENTAR CÓDIGO SI SE USA PARA ESE FIN.
         //
-        //Petición GET al servidor para obtener la ruta con otros valores:  coordenadas registrables con conforman el trayecto, maniobras realizadas durante el viaje, duración del trayecto que hay entre ellas, el nombre de las vías por las que pasa el tren
-        val peticionViajeCompleto = requests.get("http://127.0.0.1:5000/route/v1/driving/" + coordenadasOrigen(2) + "," + coordenadasOrigen(3) + ";" + coordenadasDestino(2) + "," + coordenadasDestino(3) + "?overview=full&geometries=geojson&steps=true").text()
+        //Petición GET al servidor para obtener la ruta con información más detallada (Cordenadas registrables con conforman el trayecto, maniobras realizadas durante el viaje, duración del trayecto entre maniobras, nombre de la vía de comunicación por la que pasa el vehículo...)
+        val peticionViajeCompleto = requests.get("http://127.0.0.1:5000/route/v1/train/" + coordenadasOrigen(2) + "," + coordenadasOrigen(3) + ";" + coordenadasDestino(2) + "," + coordenadasDestino(3) + "?overview=full&geometries=geojson&steps=true").text()
         val jsonViajeCompleto: JsValue = Json.parse(
           s"""
           $peticionViajeCompleto
           """)
-        //Lista con todas las coordenadas registrables por las que pasa el tren durante el trayecto. Comienza con la siguiente a la del origen y acaba en la de destino.
+        //Lista con todas las coordenadas registrables por las que pasa el tren durante el trayecto
+        //Comienza con la siguiente a la del origen (la coordenada registrable más cercana al origen) y acaba en la de destino.
         val coordenadasViajeTren = ((jsonViajeCompleto \ "routes") (0) \ "geometry" \ "coordinates").get.as[List[List[Double]]]
-        //Tiempo que hay entre cada coordenadas registrable en el viaje. Como en el perfil de trenes para OSRM el tren va a velocidad constante, el tiempo entre coordenadas también lo será
+        //Tiempo que hay entre cada par de coordenadas registrables del viaje
+        //Como en el perfil de trenes calculado para OSRM el tren va a velocidad constante, el tiempo entre coordenadas también lo será. En otro tipo de perfil de OSRM, es una aproximación a velocidad constante del medio de transporte
         val tiempoViajeEntreCoordenadas = BigDecimal(duracionViajeReal/coordenadasViajeTren.size).toDouble
-        //Lista con la duración que hay entre el inicio y cada coordenada del viaje
+        //Lista con la duración que hay entre el origen y cada coordenada registable del viaje
         var tACoordenada: List[Double] = List(tiempoViajeEntreCoordenadas)
         for (i <- 2 to coordenadasViajeTren.size) {
           tACoordenada = tACoordenada.+:(tiempoViajeEntreCoordenadas*i)
         }
         val tiempoACoordenada = tACoordenada.reverse
-        //El nombre de la vía por la que pasa el tren se obtiene del nombre del lugar en el que se realizan las maniobras del trayecto
+        //Nombre de la vía de circulación actual del vehículo durante el viaje
+        //
+        /*
+        //El nombre de la vía por la que pasa el vehiculo se obtiene del nombre del lugar donde se realizan las maniobras registrables en OSRM durante el trayecto
         //Lista con la duración acumulativa que hay desde el origen hasta cada maniobra realizada
         val duracionManiobrasJsValue = (jsonViajeCompleto \\ "duration").toList
         val (duracionManiobrasJsValueLimpio, _) = duracionManiobrasJsValue.splitAt(duracionManiobrasJsValue.size - 2)
@@ -106,24 +116,13 @@ class Tren extends Actor with ActorLogging {
           acDuracionManiobras = acDuracionManiobras.+:(acumulacion)
         }
         val acumDuracionManiobras = acDuracionManiobras.reverse.map(double => BigDecimal(double).toDouble)
-        //Se crea una lista con los índices de la lista de maniobras cuya duración desde el origen a esa maniobra se acerque más al tiempo de los logs periódicos.
+        */
+        //Lista con los índices de la lista de tiempos a cada coordenada que se correspondan con el tiempo de los logs periódicos del programa o que más se acerque
         //El tamaño de la lista es la cantidad de logs que se harían durante el viaje
-        //Además, se crea otra lista de las mismas características con los índices de la lista de tiempos a cada coordenada
-        var indManiobras: List[Int] = List(0)
+        //Además, se crea otra lista de las mismas características para la lista de duración a maniobras
         var indCoordenada: List[Int] = List(0)
+        //var indManiobras: List[Int] = List(0)
         for (i <- 1 to (duracionViaje / tiempoLog).toInt) {
-          breakable {
-            for (j <- acumDuracionManiobras.indices) {
-              if (acumDuracionManiobras(j) == tiempoLogSegundos * i) {
-                indManiobras = indManiobras.+:(j)
-                break()
-              }
-              else if (acumDuracionManiobras(j) > tiempoLogSegundos * i) {
-                indManiobras = indManiobras.+:(j)
-                break()
-              }
-            }
-          }
           breakable {
             for (j <- tiempoACoordenada.indices) {
               if (tiempoACoordenada(j) == tiempoLogSegundos * i) {
@@ -136,15 +135,32 @@ class Tren extends Actor with ActorLogging {
               }
             }
           }
+          /*
+          breakable {
+            for (j <- acumDuracionManiobras.indices) {
+              if (acumDuracionManiobras(j) == tiempoLogSegundos * i) {
+                indManiobras = indManiobras.+:(j)
+                break()
+              }
+              else if (acumDuracionManiobras(j) > tiempoLogSegundos * i) {
+                indManiobras = indManiobras.+:(j)
+                break()
+              }
+            }
+          }
+          */
         }
-        val indicesManiobras = indManiobras.reverse.tail
         val indicesCoordenadas = indCoordenada.reverse.tail
-        //Lista con el nombre de la vía donde se encuentra el lugar de la maniobra
+        //val indicesManiobras = indManiobras.reverse.tail
+        /*
+        //Lista con los nombres de la vía de comunicación donde se realizan las maniobras
         val nombreLocalizacionManiobras = (jsonViajeCompleto \\ "name").toList
         val (nombreLocalizacionManiobrasLimpio, _) = nombreLocalizacionManiobras.splitAt(nombreLocalizacionManiobras.size - 2)
         val nombreLocManiobras: List[String] = nombreLocalizacionManiobrasLimpio.map(nombre => s"$nombre")
-        //Lista con la referencia de la vía donde se encuentra el lugar de la maniobra
+        //Lista con la referencia de la vía de comunicación donde se realizan las maniobras
+        //Es un acompañamiento al nombre y puede hacer de él en caso de que no exista
         //Como hay maniobras en las que no aparece esta propiedad ("ref") hay que añadírsela en blanco a cada una de ellas
+        //En ocasiones, el campo de referencia "ref" no existe para ciertas maniobras. Por ello, cada vez que no exista hay que añadirlas en blanco
         var refActual: List[String] = List("0")
         for (i <- nombreLocManiobras.indices) {
           try {
@@ -155,8 +171,10 @@ class Tren extends Actor with ActorLogging {
           }
         }
         val referenciaActual = refActual.reverse.tail
+        //Lista de la localización actual del vehículo
+        //Está formada por el nombre y la referencia de la vía de comunicación, en caso de que exista, en la que se encuentre el vehículo
+        //Se eligen las maniobras más cercanas al tiempo de los logs periódicos a través de la lista "indicesManiobras"
         //Se obtiene la lista de la localización actual (nombre vía) del tren en la cantidad de tiempo marcada por "tiempoLog"
-        //Esta lista contiene el nombre y la referencia (cuando existan) de la maniobra más cercana al tiempo del log a través de la lista "indicesManiobras"
         var locActual: List[String] = List("Inicial")
         for (i <- indicesManiobras.indices) {
           if (nombreLocManiobras(indicesManiobras(i)).compareTo("") == 2) {
@@ -171,42 +189,31 @@ class Tren extends Actor with ActorLogging {
           }
         }
         val localizacionActual = locActual.reverse.tail
+        */
 
-        println("-------------------------------------------------------------")
-        println(duracionViajeReal)
-        println(duracionViaje)
-        println(tiempoLogSegundos)
-        println(tiempoLog)
-        println(coordenadasViajeTren.size)
-        println(tiempoViajeEntreCoordenadas)
-        println(tiempoACoordenada.size)
-        println(duracionManiobrasJsValue.size)
-        println(duracionManiobrasJsValueLimpio.size)
-        println(acumDuracionManiobras.size)
-        println((duracionViaje / tiempoLog).toInt)
-        println(indicesManiobras.size)
-        println(indicesCoordenadas.size)
-        println(nombreLocalizacionManiobrasLimpio.size)
-        println(referenciaActual.size)
-        println(localizacionActual.size)
-        println("-------------------------------------------------------------")
+        //Resumen de la ruta realizada entre las coordenadas origen y destino
+        //Válido para cuando solamente hay una coordenada de origen y otra de destino
+        //En futuras implementaciones, si se realizan rutas con varias coordenadas, el resultado de "summary" es una lista que debe ser tratada igual que los nombres de las vías.
+        val resumenRutaJsValue = (jsonViajeCompleto \\ "summary").head
+        val resumenRuta = s"$resumenRutaJsValue"
 
         log.debug(s"    [Tren $tren_id] Tren con salida: ${coordenadasOrigen(1)}, ${coordenadasOrigen(0)}. Destino: ${coordenadasDestino(1)}, ${coordenadasDestino(0)}") //random number viaje $rnd
         log.debug(s"    [Tren $tren_id] Duración estimada del viaje: $horasRealesViaje horas, $minutosRealesViaje minutos y $segundosRealesViaje segundos")
+        log.debug(s"    [Tren $tren_id] Resumen ruta Origen-Destino: $resumenRuta")
 
         //Scheduler cada "tiempoLog" hasta el final del viaje con la posición actual del tren y el tiempo que lleva de viaje
-        for(i <- localizacionActual.indices) {
+        for(i <- indicesCoordenadas.indices) {
           val minutos = (((tiempoLogSegundos*(i+1)).toDouble / 60) % 60).toInt
           val horas = (tiempoLogSegundos*(i+1).toDouble / 3600).toInt
           if (tiempoLog*i < duracionViaje) {
             context.system.scheduler.scheduleOnce((tiempoLog * (i+1)).milliseconds) {
-              if (horas == 0) log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+minutos+" minutos || Posición actual --> Longitud: "+coordenadasViajeTren(indicesCoordenadas(i)).head+", Latitud: "+coordenadasViajeTren(indicesCoordenadas(i))(1)+"; "+localizacionActual(i))
-              if (horas == 1) log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+horas+" hora, "+minutos+": minutos || Posición actual --> Longitud: "+coordenadasViajeTren(indicesCoordenadas(i)).head+", Latitud: "+coordenadasViajeTren(indicesCoordenadas(i))(1)+";  "+localizacionActual(i))
-              if (horas > 1) log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+horas+" horas, "+minutos+" minutos || Posición actual --> Longitud: "+coordenadasViajeTren(indicesCoordenadas(i)).head+", Latitud: "+coordenadasViajeTren(indicesCoordenadas(i))(1)+";  "+localizacionActual(i))
+              if (horas == 0) log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+minutos+" minutos || Posición actual --> Longitud: "+coordenadasViajeTren(indicesCoordenadas(i)).head+", Latitud: "+coordenadasViajeTren(indicesCoordenadas(i))(1)) //+"; "+localizacionActual(i))
+              if (horas == 1) log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+horas+" hora, "+minutos+": minutos || Posición actual --> Longitud: "+coordenadasViajeTren(indicesCoordenadas(i)).head+", Latitud: "+coordenadasViajeTren(indicesCoordenadas(i))(1)) //+";  "+localizacionActual(i))
+              if (horas > 1) log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+horas+" horas, "+minutos+" minutos || Posición actual --> Longitud: "+coordenadasViajeTren(indicesCoordenadas(i)).head+", Latitud: "+coordenadasViajeTren(indicesCoordenadas(i))(1)) //+";  "+localizacionActual(i))
             }
           }
         }
-        context.system.scheduler.scheduleOnce(duracionViaje.milliseconds) { //rnd.milliseconds
+        context.system.scheduler.scheduleOnce(duracionViaje.milliseconds) {
           self ! FinViaje
         }
       case "esperaInicioViaje" =>
