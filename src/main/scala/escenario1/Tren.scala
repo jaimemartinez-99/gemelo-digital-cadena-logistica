@@ -38,7 +38,7 @@ class Tren extends Actor with ActorLogging {
   var scheduleTren: Cancellable = _
   var producer: ActorRef = _
 
-  def intervaloTiempoTren(evento: String, tren_id: Int, capacidad: Int, coordenadasOrigen: Array[String], coordenadasDestino: Array[String], ruta: Seq[Localizacion], fdv: Int, fabMasterRef: ActorRef): Cancellable = {
+  def intervaloTiempoTren(evento: String, tren_id: Int, capacidad: Int, coordenadasOrigen: Array[String], coordenadasDestino: Array[String], ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef): Cancellable = {
     val r = new Random()
     evento match {
       case "recibirPaquetes" =>
@@ -207,9 +207,19 @@ class Tren extends Actor with ActorLogging {
           val horas = (tiempoLogSegundos*(i+1).toDouble / 3600).toInt
           if (tiempoLog*i < duracionViaje) {
             context.system.scheduler.scheduleOnce((tiempoLog * (i+1)).milliseconds) {
-              if (horas == 0) log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+minutos+" minutos || Posición actual --> Longitud: "+coordenadasViajeTren(indicesCoordenadas(i)).head+", Latitud: "+coordenadasViajeTren(indicesCoordenadas(i))(1)) //+"; "+localizacionActual(i))
-              if (horas == 1) log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+horas+" hora, "+minutos+": minutos || Posición actual --> Longitud: "+coordenadasViajeTren(indicesCoordenadas(i)).head+", Latitud: "+coordenadasViajeTren(indicesCoordenadas(i))(1)) //+";  "+localizacionActual(i))
-              if (horas > 1) log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+horas+" horas, "+minutos+" minutos || Posición actual --> Longitud: "+coordenadasViajeTren(indicesCoordenadas(i)).head+", Latitud: "+coordenadasViajeTren(indicesCoordenadas(i))(1)) //+";  "+localizacionActual(i))
+              val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
+              if (horas == 0) {
+                log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+minutos+" minutos || Posición actual --> Longitud: "+coordenadasViajeTren(indicesCoordenadas(i)).head+", Latitud: "+coordenadasViajeTren(indicesCoordenadas(i))(1))
+              } //+"; "+localizacionActual(i))
+              if (horas == 1) {
+                log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+horas+" hora, "+minutos+": minutos || Posición actual --> Longitud: "+coordenadasViajeTren(indicesCoordenadas(i)).head+", Latitud: "+coordenadasViajeTren(indicesCoordenadas(i))(1))
+                val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
+              } //+";  "+localizacionActual(i))
+              if (horas > 1) {
+                log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+horas+" horas, "+minutos+" minutos || Posición actual --> Longitud: "+coordenadasViajeTren(indicesCoordenadas(i)).head+", Latitud: "+coordenadasViajeTren(indicesCoordenadas(i))(1))
+                val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
+              } //+";  "+localizacionActual(i))
+              producer ! f"""{"train_id": $tren_id, "event_type": "IN TRAVEL", "date": "$dtEvento", "train_origin": "${coordenadasOrigen(0)}", "train_destination": "${coordenadasDestino(0)}", "station_origin": "${coordenadasOrigen(1)}", "station_destination": "${coordenadasDestino(1)}", "longitude_coordinate": "${coordenadasViajeTren(indicesCoordenadas(i)).head}", "latitude_coordinate": "${coordenadasViajeTren(indicesCoordenadas(i))(1)}"}"""
             }
           }
         }
@@ -247,7 +257,7 @@ class Tren extends Actor with ActorLogging {
       val coordenadasDestino =  Array("Ciudad Origen","Estacion Origen","Longitud Destino", "Latitud Destino")
       log.debug(s"    [Tren $id] Iniciado en ${ruta.head.name} con una capacidad maxima de $capacidad paquetes, Fecha y hora: $dtEvento")
       producer = producerRef
-      scheduleTren = intervaloTiempoTren("recibirPaquetes",id, capacidad, coordenadasOrigen, coordenadasDestino, ruta, fdv, fabMasterRef)
+      scheduleTren = intervaloTiempoTren("recibirPaquetes",id, capacidad, coordenadasOrigen, coordenadasDestino, ruta, fdv, dtI, dt0, fabMasterRef)
       context.become(enOrigen(id, Seq[Paquete](), capacidad, estaciones, coordenadasOrigen, coordenadasDestino, ruta.head, ruta(1), ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
 
@@ -260,7 +270,7 @@ class Tren extends Actor with ActorLogging {
       nuevaListaPaquetesTren.foreach(p =>
         producer ! f"""{"package_id": ${p.id} , "priority": ${p.prioridad} , "client": "${p.cliente.name}", "event_type": "START OF TRAIN LOADING", "event_location": "${localizacionOrigen.name}", "date": "$dtEvento", "train_origin": "${localizacionOrigen.name}", "train_id": $id, "train_destination": "${localizacionDestino.name}"}"""
       )
-      scheduleTren = intervaloTiempoTren("cargarDescargarPaquetes",id, capacidad, coordenadasOrigen, coordenadasDestino, ruta, fdv, fabMasterRef)
+      scheduleTren = intervaloTiempoTren("cargarDescargarPaquetes",id, capacidad, coordenadasOrigen, coordenadasDestino, ruta, fdv, dtI, dt0, fabMasterRef)
       context.become(enCarga(id, capacidad, estaciones, coordenadasOrigen, coordenadasDestino, nuevaListaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
 
@@ -272,7 +282,7 @@ class Tren extends Actor with ActorLogging {
       listaPaquetesTren.foreach(p =>
         producer ! f"""{"package_id": ${p.id}, "priority": ${p.prioridad}, "client": "${p.cliente.name}", "event_type": "END OF TRAIN LOADING", "event_location": "${localizacionOrigen.name}", "date": "$dtEvento", "train_origin": "${localizacionOrigen.name}", "train_id": $id, "train_destination": "${localizacionDestino.name}"}"""
       )
-      scheduleTren = intervaloTiempoTren("esperaInicioViaje", id, capacidad, coordenadasOrigen, coordenadasDestino, ruta, fdv, fabMasterRef)
+      scheduleTren = intervaloTiempoTren("esperaInicioViaje", id, capacidad, coordenadasOrigen, coordenadasDestino, ruta, fdv, dtI, dt0, fabMasterRef)
       context.become(enEsperaInicioViaje(id, capacidad, estaciones, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
 
@@ -311,7 +321,7 @@ class Tren extends Actor with ActorLogging {
       listaPaquetesTren.foreach(p =>
         producer ! f"""{"package_id": ${p.id}, "priority": ${p.prioridad}, "client": "${p.cliente.name}", "event_type": "TRAIN DEPARTURE FROM ORIGIN", "event_location": "${localizacionOrigen.name}", "date": "$dtEvento", "train_origin": "${localizacionOrigen.name}", "train_id": $id, "train_destination": "${localizacionDestino.name}"}"""
       )
-      scheduleTren = intervaloTiempoTren("viaje",id, capacidad, coorTrenOrigen, coorTrenDestino, ruta, fdv, fabMasterRef)
+      scheduleTren = intervaloTiempoTren("viaje",id, capacidad, coorTrenOrigen, coorTrenDestino, ruta, fdv, dtI, dt0, fabMasterRef)
       context.become(enViaje(id, capacidad, estaciones, coorTrenOrigen, coorTrenDestino, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
 
@@ -323,7 +333,7 @@ class Tren extends Actor with ActorLogging {
       listaPaquetesTren.foreach(p =>
         producer ! f"""{"package_id": ${p.id}, "priority": ${p.prioridad}, "client": "${p.cliente.name}", "event_type": "TRAIN ARRIVAL AT DESTINATION", "event_location": "${localizacionDestino.name}", "date": "$dtEvento", "train_origin": "${localizacionOrigen.name}", "train_id": $id, "train_destination": "${localizacionDestino.name}"}"""
       )
-      scheduleTren = intervaloTiempoTren("esperaDescargaPaquetes",id, capacidad, coordenadasOrigen, coordenadasDestino, ruta, fdv, fabMasterRef)
+      scheduleTren = intervaloTiempoTren("esperaDescargaPaquetes",id, capacidad, coordenadasOrigen, coordenadasDestino, ruta, fdv, dtI, dt0, fabMasterRef)
       context.become(enDestinoSinDescarga(id, capacidad, estaciones, coordenadasOrigen, coordenadasDestino, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
 
@@ -335,7 +345,7 @@ class Tren extends Actor with ActorLogging {
       listaPaquetesTren.foreach(p =>
         producer ! f"""{"package_id": ${p.id}, "priority": ${p.prioridad}, "client": "${p.cliente.name}", "event_type": "START OF TRAIN UNLOADING", "event_location": "${localizacionDestino.name}", "date": "$dtEvento", "train_origin": "${localizacionOrigen.name}", "train_id": $id, "train_destination": "${localizacionDestino.name}"}"""
       )
-      scheduleTren = intervaloTiempoTren("cargarDescargarPaquetes",id, capacidad, coordenadasOrigen, coordenadasDestino, ruta, fdv, fabMasterRef)
+      scheduleTren = intervaloTiempoTren("cargarDescargarPaquetes",id, capacidad, coordenadasOrigen, coordenadasDestino, ruta, fdv, dtI, dt0, fabMasterRef)
       context.become(enDescarga(id, capacidad, estaciones, coordenadasOrigen, coordenadasDestino, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
 
@@ -347,7 +357,7 @@ class Tren extends Actor with ActorLogging {
       listaPaquetesTren.foreach(p =>
         producer ! f"""{"package_id": ${p.id}, "priority": ${p.prioridad}, "client": "${p.cliente.name}", "event_type": "END OF TRAIN UNLOADING", "event_location": "${localizacionDestino.name}", "date": "$dtEvento", "train_origin": "${localizacionOrigen.name}", "train_id": $id, "train_destination": "${localizacionDestino.name}"}"""
       )
-      scheduleTren = intervaloTiempoTren("entregaAlmacen",id, capacidad, coordenadasOrigen, coordenadasDestino, ruta, fdv, fabMasterRef)
+      scheduleTren = intervaloTiempoTren("entregaAlmacen",id, capacidad, coordenadasOrigen, coordenadasDestino, ruta, fdv, dtI, dt0, fabMasterRef)
       context.become(enDestino(id, capacidad, estaciones, coordenadasOrigen, coordenadasDestino, listaPaquetesTren, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
 
@@ -368,7 +378,7 @@ class Tren extends Actor with ActorLogging {
       val nuevaListaPaquetesTren = listaPaquetesTren.diff(listaPaquetesParaAlmacen)
       val capacidadRestante = capacidad - nuevaListaPaquetesTren.size
       log.debug(s"    [Tren $id] En ${nuevaRuta.head.name} con una capacidad maxima de $capacidad paquetes y los paquetes: ${nuevaListaPaquetesTren.map(p => p.id)}, Fecha y hora: $dtEvento")
-      scheduleTren = intervaloTiempoTren("recibirPaquetes", id, capacidadRestante, coordenadasOrigen, coordenadasDestino, nuevaRuta, fdv, fabMasterRef)
+      scheduleTren = intervaloTiempoTren("recibirPaquetes", id, capacidadRestante, coordenadasOrigen, coordenadasDestino, nuevaRuta, fdv, dtI, dt0, fabMasterRef)
       context.become(enOrigen(id, nuevaListaPaquetesTren, capacidad, estaciones, coordenadasOrigen, coordenadasDestino, nuevaRuta.head, nuevaRuta(1), nuevaRuta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
 }
