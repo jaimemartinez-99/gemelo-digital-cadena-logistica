@@ -219,7 +219,7 @@ class Tren extends Actor with ActorLogging {
                 log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+horas+" horas, "+minutos+" minutos || Posición actual --> Longitud: "+coordenadasViajeTren(indicesCoordenadas(i)).head+", Latitud: "+coordenadasViajeTren(indicesCoordenadas(i))(1))
                 val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
               } //+";  "+localizacionActual(i))
-              producer ! f"""{"train_id": $tren_id, "event_type": "IN TRAVEL", "date": "$dtEvento", "train_origin": "${coordenadasOrigen(0)}", "train_destination": "${coordenadasDestino(0)}", "station_origin": "${coordenadasOrigen(1)}", "station_destination": "${coordenadasDestino(1)}", "longitude_coordinate": "${coordenadasViajeTren(indicesCoordenadas(i)).head}", "latitude_coordinate": "${coordenadasViajeTren(indicesCoordenadas(i))(1)}"}"""
+              producer ! f"""{"train_id": $tren_id, "event_type": "TRAIN IN TRAVEL", "date": "$dtEvento", "train_origin": "${coordenadasOrigen(0)}", "train_destination": "${coordenadasDestino(0)}", "station_origin": "${coordenadasOrigen(1)}", "station_destination": "${coordenadasDestino(1)}", "longitude_coordinate": ${coordenadasViajeTren(indicesCoordenadas(i)).head}, "latitude_coordinate": ${coordenadasViajeTren(indicesCoordenadas(i))(1)}}"""
             }
           }
         }
