@@ -36,6 +36,7 @@ class Tren extends Actor with ActorLogging {
   import AlmacenMaster._
   import system.dispatcher
 
+
   var scheduleTren: Cancellable = _
   var producer: ActorRef = _
 
