@@ -74,13 +74,13 @@ class Tren extends Actor with ActorLogging {
         val r = new Random()
         val time = 15
         val factor = if (r.nextDouble()<0.13) {
-          producer ! f"""{"tren_id": ${tren_id},"event_type": "DELAYED TRAIN"}"""
+          producer ! f"""{"tren_id": $tren_id,"event_type": "DELAYED TRAIN"}"""
           (r.nextGaussian()* 0.5 + 1).abs
         } else {
-          producer ! f"""{"tren_id": ${tren_id},"event_type": "NO DELAYS OCCURRED"}"""
+          producer ! f"""{"tren_id": $tren_id,"event_type": "NO DELAYS OCCURRED"}"""
           1
         }
-        println("elfactor" + factor)
+        println("el factor" + factor)
         //BLOQUE DE DURACIONES REALES
         val duracionViajeReal = s"$duracionViajeJsValue".toDouble * factor
         val duracionViajeRealMins = duracionViajeReal / 60
