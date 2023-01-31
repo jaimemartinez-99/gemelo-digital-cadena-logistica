@@ -24,6 +24,7 @@ object Tren {
   case class  RecibirPaquetes (listaPaquetes: Seq[Paquete])
   case object FinCargaDescarga
   case object InicioViaje
+  case object InicioViajeConRetraso
   case object FinViaje
   case object InicioDescarga
   case object EntregarAlmacen
@@ -70,11 +71,37 @@ class Tren extends Actor with ActorLogging {
         //VÁLIDO PARA VIAJES CON SOLO UNA COORDENADA DE ORIGEN Y OTRA DESTINO (Caso actual)
         //SI LA PETICIÓN ES DE VARIAS COORDENADAS, HAY QUE OBSERVAR LA RESPUESTA DE LA PETICIÓN Y VER QUÉ CAMPO 'DURATION' ES EL DE LA DURACIÓN COMPLETA DEL VIAJE
         val duracionViajeJsValue = (((jsonViaje \ "routes") (0) \ "legs") (0) \ "duration").get
-        val duracionViajeReal = s"$duracionViajeJsValue".toDouble
+        val r = new Random()
+        val time = 15
+        val factor = if (r.nextDouble()<0.13) {
+          producer ! f"""{"tren_id": ${tren_id},"event_type": "DELAYED TRAIN"}"""
+          (r.nextGaussian()* 0.5 + 1).abs
+        } else {
+          producer ! f"""{"tren_id": ${tren_id},"event_type": "NO DELAYS OCCURRED"}"""
+          1
+        }
+        println("elfactor" + factor)
+        //BLOQUE DE DURACIONES REALES
+        val duracionViajeReal = s"$duracionViajeJsValue".toDouble * factor
+        val duracionViajeRealMins = duracionViajeReal / 60
         val duracionViaje = duracionViajeReal * 1000 / fdv.toDouble
         val segundosRealesViaje = (duracionViajeReal % 60).round.toInt
         val minutosRealesViaje = ((math floor duracionViajeReal / 60) % 60).toInt
         val horasRealesViaje = (math floor duracionViajeReal / 3600).toInt
+
+        //BLOQUE DE DURACIONES ESTIMADAS
+        val duracionViajeEstimada = s"$duracionViajeJsValue".toDouble
+        val duracionViajeEstMins = duracionViajeEstimada / 60
+        val duracionViajeEst = duracionViajeEstimada * 1000 / fdv.toDouble
+        val segundosEstimadosViaje = (duracionViajeEstimada % 60).round.toInt
+        val minutosEstimadosViaje = ((math floor duracionViajeEstimada / 60) % 60).toInt
+        val horasEstimadosViaje = (math floor duracionViajeEstimada / 3600).toInt
+
+        val delay = if (factor>1) {
+          duracionViajeRealMins - duracionViajeEstMins
+        } else {
+          duracionViajeEstMins - duracionViajeRealMins
+        }
 
         //Tiempo de aparición de los logs periódicos marcando la posición actual del tren
         val tiempoLogSegundos = 60 * 5 ////5 minutos
@@ -198,7 +225,8 @@ class Tren extends Actor with ActorLogging {
         val resumenRuta = s"$resumenRutaJsValue"
 
         log.debug(s"    [Tren $tren_id] Tren con salida: ${coordenadasOrigen(1)}, ${coordenadasOrigen(0)}. Destino: ${coordenadasDestino(1)}, ${coordenadasDestino(0)}") //random number viaje $rnd
-        log.debug(s"    [Tren $tren_id] Duración estimada del viaje: $horasRealesViaje horas, $minutosRealesViaje minutos y $segundosRealesViaje segundos")
+        log.debug(s"    [Tren $tren_id] Duración estimada del viaje: $horasEstimadosViaje horas, $minutosEstimadosViaje minutos y $segundosEstimadosViaje segundos")
+        log.debug(s"    [Tren $tren_id] Duración real del viaje: $horasRealesViaje horas, $minutosRealesViaje minutos y $segundosRealesViaje segundos")
         log.debug(s"    [Tren $tren_id] Resumen ruta Origen-Destino: $resumenRuta")
 
         //Scheduler cada "tiempoLog" hasta el final del viaje con la posición actual del tren y el tiempo que lleva de viaje
@@ -219,10 +247,7 @@ class Tren extends Actor with ActorLogging {
                 log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+horas+" horas, "+minutos+" minutos || Posición actual --> Longitud: "+coordenadasViajeTren(indicesCoordenadas(i)).head+", Latitud: "+coordenadasViajeTren(indicesCoordenadas(i))(1))
                 val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
               } //+";  "+localizacionActual(i))
-              producer ! f"""{"train_id": $tren_id, "event_type": "TRAIN IN TRAVEL", "date": "$dtEvento", "train_origin": "${coordenadasOrigen(0)}", "train_destination": "${coordenadasDestino(0)}", "station_origin": "${coordenadasOrigen(1)}", "station_destination": "${coordenadasDestino(1)}", "longitude_coordinate": ${coordenadasViajeTren(indicesCoordenadas(i)).head}, "latitude_coordinate": ${coordenadasViajeTren(indicesCoordenadas(i))(1)}}"""
-            }
-          }
-        }
+              producer ! f"""{"train_id": $tren_id, "event_type": "TRAIN IN TRAVEL", "date": "$dtEvento","estimated_duration": "$duracionViajeEstMins","real_duration": "$duracionViajeRealMins", "delay": "$delay", "train_origin": "${coordenadasOrigen(0)}", "train_destination": "${coordenadasDestino(0)}","station_origin": "${coordenadasOrigen(1)}", "station_destination": "${coordenadasDestino(1)}", "coordenadas":[${coordenadasViajeTren(indicesCoordenadas(i)).head},${coordenadasViajeTren(indicesCoordenadas(i))(1)}]}""" }        }}
         context.system.scheduler.scheduleOnce(duracionViaje.milliseconds) {
           self ! FinViaje
         }
@@ -289,8 +314,8 @@ class Tren extends Actor with ActorLogging {
   def enEsperaInicioViaje(id: Int, capacidad: Int, estaciones: Seq[Estacion], listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef): Receive = {
     case InicioViaje =>
       scheduleTren.cancel()
-      var coorTrenOrigen = Array("Ciudad Tren Origen", "Estacion Tren Origen", "Longitud Tren Origen","Latitud Tren Origen")
-      var coorTrenDestino = Array("Ciudad Tren Destino", "Estacion Tren Origen", "Longitud Tren Destino","Latitud Tren Destino")
+      var coorTrenOrigen = Array("Ciudad Tren Origen", "Estacion Tren Origen", "Longitud Tren Origen", "Latitud Tren Origen")
+      var coorTrenDestino = Array("Ciudad Tren Destino", "Estacion Tren Origen", "Longitud Tren Destino", "Latitud Tren Destino")
       val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"    [Tren $id] Evento: SALIDA DESDE EL ORIGEN, Fecha y hora: $dtEvento")
 
@@ -321,20 +346,20 @@ class Tren extends Actor with ActorLogging {
       listaPaquetesTren.foreach(p =>
         producer ! f"""{"package_id": ${p.id}, "priority": ${p.prioridad}, "client": "${p.cliente.name}", "event_type": "TRAIN DEPARTURE FROM ORIGIN", "event_location": "${localizacionOrigen.name}", "date": "$dtEvento", "train_origin": "${localizacionOrigen.name}", "train_id": $id, "train_destination": "${localizacionDestino.name}"}"""
       )
-      scheduleTren = intervaloTiempoTren("viaje",id, capacidad, coorTrenOrigen, coorTrenDestino, ruta, fdv, dtI, dt0, fabMasterRef)
+      scheduleTren = intervaloTiempoTren("viaje", id, capacidad, coorTrenOrigen, coorTrenDestino, ruta, fdv, dtI, dt0, fabMasterRef)
       context.become(enViaje(id, capacidad, estaciones, coorTrenOrigen, coorTrenDestino, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
   }
-
   def enViaje(id: Int, capacidad: Int, estaciones: Seq[Estacion], coordenadasOrigen: Array[String], coordenadasDestino: Array[String], listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef): Receive =  {
     case FinViaje =>
       scheduleTren.cancel()
       val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
       log.debug(s"    [Tren $id] Evento: LLEGADA A DESTINO, Fecha y hora: $dtEvento")
       listaPaquetesTren.foreach(p =>
-        producer ! f"""{"package_id": ${p.id}, "priority": ${p.prioridad}, "client": "${p.cliente.name}", "event_type": "TRAIN ARRIVAL AT DESTINATION", "event_location": "${localizacionDestino.name}", "date": "$dtEvento", "train_origin": "${localizacionOrigen.name}", "train_id": $id, "train_destination": "${localizacionDestino.name}"}"""
+        producer ! f"""{"package_id": ${p.id}, "priority": ${p.prioridad}, "client": "${p.cliente.name}", "event_type": "TRAIN ARRIVAL AT DESTINATION","event_location": "${localizacionDestino.name}", "date": "$dtEvento", "train_origin": "${localizacionOrigen.name}", "train_id": $id, "train_destination": "${localizacionDestino.name}"}"""
       )
       scheduleTren = intervaloTiempoTren("esperaDescargaPaquetes",id, capacidad, coordenadasOrigen, coordenadasDestino, ruta, fdv, dtI, dt0, fabMasterRef)
       context.become(enDestinoSinDescarga(id, capacidad, estaciones, coordenadasOrigen, coordenadasDestino, listaPaquetesTren, localizacionOrigen, localizacionDestino, ruta, fdv, dtI, dt0, fabMasterRef, almMasterRef))
+
   }
 
   def enDestinoSinDescarga(id: Int, capacidad: Int, estaciones: Seq[Estacion], coordenadasOrigen: Array[String], coordenadasDestino: Array[String], listaPaquetesTren: Seq[Paquete], localizacionOrigen: Localizacion, localizacionDestino: Localizacion, ruta: Seq[Localizacion], fdv: Int, dtI: DateTime, dt0: DateTime, fabMasterRef: ActorRef, almMasterRef: ActorRef): Receive =  {

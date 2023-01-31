@@ -22,7 +22,7 @@ class KafkaPublisher extends Actor {
   override def receive: Receive = {
     case x:String =>
       println(x)
-      producer.send(new ProducerRecord("simulator", x))
+      producer.send(new ProducerRecord("simulator_v2", x))
     case _ =>
   }
 }
