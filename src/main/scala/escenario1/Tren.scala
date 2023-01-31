@@ -71,6 +71,7 @@ class Tren extends Actor with ActorLogging {
         //VÁLIDO PARA VIAJES CON SOLO UNA COORDENADA DE ORIGEN Y OTRA DESTINO (Caso actual)
         //SI LA PETICIÓN ES DE VARIAS COORDENADAS, HAY QUE OBSERVAR LA RESPUESTA DE LA PETICIÓN Y VER QUÉ CAMPO 'DURATION' ES EL DE LA DURACIÓN COMPLETA DEL VIAJE
         val duracionViajeJsValue = (((jsonViaje \ "routes") (0) \ "legs") (0) \ "duration").get
+
         val r = new Random()
         val time = 15
         val factor = if (r.nextDouble()<0.13) {
