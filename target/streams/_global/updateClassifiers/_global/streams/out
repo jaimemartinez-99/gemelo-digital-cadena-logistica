@@ -1,4 +1,3 @@
-[warn] scala-library-2.13.7-sources.jar no longer exists at C:\Users\mario\AppData\Local\Coursier\Cache\v1\https\repo1.maven.org\maven2\org\scala-lang\scala-library\2.13.7\scala-library-2.13.7-sources.jar
-[debug] not up to date. inChanged = false, force = false
-[debug] Updating ProjectRef(uri("file:/D:/Archivos%20uni/TFG/gemelo-digital-cadena-logistica/"), "gemelo-digital-cadena-logistica")...
-[debug] Done updating ProjectRef(uri("file:/D:/Archivos%20uni/TFG/gemelo-digital-cadena-logistica/"), "gemelo-digital-cadena-logistica")
+[debug] not up to date. inChanged = true, force = false
+[debug] Updating ProjectRef(uri("file:/C:/Users/mario/Desktop/gemelo-digital-cadena-logistica/"), "gemelo-digital-cadena-logistica")...
+[debug] Done updating ProjectRef(uri("file:/C:/Users/mario/Desktop/gemelo-digital-cadena-logistica/"), "gemelo-digital-cadena-logistica")
