@@ -36,6 +36,8 @@ Entre los eventos que se identifican se encuentran:
 | INICIO CARGA DEL TREN | Se ha iniciado la carga de los paquetes |
 | FIN DE CARGA DEL TREN | Se ha finalizado la carga de los paquetes |
 | SALIDA DESDE EL ORIGEN DEL TREN | El tren ha iniciado el viaje |
+| SALIDA SIN RETRASO | El tren ha iniciado el viaje a la hora estimada de salida|
+| SALIDA CON RETRASO | El tren ha iniciado el viaje pero con cierto retraso de la hora estimada de salida|
 | TREN EN VIAJE | El tren está en cierto punto del viaje |
 | LLEGADA A DESTINO DEL TREN | El tren ha llegado a su destino |
 | INICIO DESCARGA DEL TREN | Se ha iniciado la descarga de los paquetes |
