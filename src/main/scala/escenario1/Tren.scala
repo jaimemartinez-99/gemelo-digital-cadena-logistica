@@ -17,6 +17,7 @@ import scala.util.control.Breaks.{break, breakable}
 /**
  * @author José Antonio Antona Díaz
  * @author Mario Esperalta Delgado
+ * @author Jaime Martínez Ramón
  */
 
 object Tren {
@@ -73,19 +74,61 @@ class Tren extends Actor with ActorLogging {
         //SI LA PETICIÓN ES DE VARIAS COORDENADAS, HAY QUE OBSERVAR LA RESPUESTA DE LA PETICIÓN Y VER QUÉ CAMPO 'DURATION' ES EL DE LA DURACIÓN COMPLETA DEL VIAJE
         val duracionViajeJsValue = (((jsonViaje \ "routes") (0) \ "legs") (0) \ "duration").get
 
+        val snow_chance = 0.25
         val r = new Random()
-        val time = 15
-        val factor = if (r.nextDouble()<0.13) {
-          producer ! f"""{"tren_id": $tren_id,"event_type": "DELAYED TRAIN"}"""
-          (r.nextGaussian()* 0.5 + 1).abs
-        } else {
-          producer ! f"""{"tren_id": $tren_id,"event_type": "NO DELAYS OCCURRED"}"""
-          1
+        // Se definen los grupos de retraso en un map
+        val grupos = Map(
+          1 -> 0.4659,
+          2 -> 0.3189,
+          3 -> 0.1670,
+          4 -> 0.0434
+        )
+        val retrasos = Map(
+          1 -> (0, 30),
+          2 -> (30, 60),
+          3 -> (60, 120),
+          4 -> (120, 250)
+        )
+
+        def asignarGrupo(num: Double): Int = {
+          var sumaProbabilidades = 0.0
+          for ((grupo, probabilidad) <- grupos) {
+            sumaProbabilidades += probabilidad
+            if (num <= sumaProbabilidades) {
+              return grupo
+            }
+          }
+          grupos.keys.last
         }
-        println("el factor" + factor)
+
+        // Al generar un número y haciendo uso del método anterior se asigna el número generado a un grupo de retraso.
+        val retraso = if (r.nextDouble() < snow_chance) {
+          println("Va a nevar")
+          val numAleatorio = Random.nextDouble()
+          val grupoAsignado = asignarGrupo(numAleatorio)
+          val (minRetraso, maxRetraso) = retrasos(grupoAsignado)
+          val retrasoGenerado = Random.nextInt(maxRetraso - minRetraso + 1) + minRetraso
+          /*
+          grupoAsignado match {
+            case 1 => println(s"El retraso será de $retraso minutos")
+            case 2 => println(s"El retraso será de $retraso minutos")
+            case 3 => println(s"El retraso será de $retraso minutos")
+            case 4 => println(s"El retraso será de $retraso minutos")
+          }
+          */
+          producer ! f"""{"tren_id": $tren_id,"event_type": "DELAYED TRAIN","train_origin": "${coordenadasOrigen(0)}", "train_destination": "${coordenadasDestino(0)}"}"""
+          retrasoGenerado
+        } else {
+          println("No va a nevar")
+          producer ! f"""{"tren_id": $tren_id,"event_type": "NO DELAYS OCCURRED", "train_origin": "${coordenadasOrigen(0)}", "train_destination": "${coordenadasDestino(0)}"}"""
+          0
+        }
+
+        println(s"El retraso será de: $retraso minutos")
+        println(retraso.getClass)
         //BLOQUE DE DURACIONES REALES
-        val duracionViajeReal = s"$duracionViajeJsValue".toDouble * factor
-        val duracionViajeRealMins = duracionViajeReal / 60
+        val duracionViajeReal = s"$duracionViajeJsValue".toDouble
+        val duracionViajeRealMins = duracionViajeReal / 60 + retraso
         val duracionViaje = duracionViajeReal * 1000 / fdv.toDouble
         val segundosRealesViaje = (duracionViajeReal % 60).round.toInt
         val minutosRealesViaje = ((math floor duracionViajeReal / 60) % 60).toInt
@@ -98,12 +141,6 @@ class Tren extends Actor with ActorLogging {
         val segundosEstimadosViaje = (duracionViajeEstimada % 60).round.toInt
         val minutosEstimadosViaje = ((math floor duracionViajeEstimada / 60) % 60).toInt
         val horasEstimadosViaje = (math floor duracionViajeEstimada / 3600).toInt
-
-        val delay = if (factor>1) {
-          duracionViajeRealMins - duracionViajeEstMins
-        } else {
-          duracionViajeEstMins - duracionViajeRealMins
-        }
 
         //Tiempo de aparición de los logs periódicos marcando la posición actual del tren
         val tiempoLogSegundos = 60 * 5 ////5 minutos
@@ -249,7 +286,7 @@ class Tren extends Actor with ActorLogging {
                 log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+horas+" horas, "+minutos+" minutos || Posición actual --> Longitud: "+coordenadasViajeTren(indicesCoordenadas(i)).head+", Latitud: "+coordenadasViajeTren(indicesCoordenadas(i))(1))
                 val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
               } //+";  "+localizacionActual(i))
-              producer ! f"""{"train_id": $tren_id, "event_type": "TRAIN IN TRAVEL", "date": "$dtEvento","estimated_duration": "$duracionViajeEstMins","real_duration": "$duracionViajeRealMins", "delay": "$delay", "train_origin": "${coordenadasOrigen(0)}", "train_destination": "${coordenadasDestino(0)}","station_origin": "${coordenadasOrigen(1)}", "station_destination": "${coordenadasDestino(1)}", "coordenadas":[${coordenadasViajeTren(indicesCoordenadas(i)).head},${coordenadasViajeTren(indicesCoordenadas(i))(1)}]}""" }        }}
+              producer ! f"""{"train_id": $tren_id, "event_type": "TRAIN IN TRAVEL", "date": "$dtEvento","estimated_duration": "$duracionViajeEstMins","real_duration": "$duracionViajeRealMins", "delay": "$retraso", "train_origin": "${coordenadasOrigen(0)}", "train_destination": "${coordenadasDestino(0)}","station_origin": "${coordenadasOrigen(1)}", "station_destination": "${coordenadasDestino(1)}", "coordenadas":[${coordenadasViajeTren(indicesCoordenadas(i)).head},${coordenadasViajeTren(indicesCoordenadas(i))(1)}]}""" }        }}
         context.system.scheduler.scheduleOnce(duracionViaje.milliseconds) {
           self ! FinViaje
         }
