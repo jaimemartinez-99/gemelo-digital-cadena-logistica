@@ -1,12 +1,13 @@
 package escenario1
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Cancellable}
-import com.github.nscala_time.time.Imports.{richReadableInstant, richReadableInterval}
+import com.github.nscala_time.time.Imports.{ richReadableInstant, richReadableInterval}
 import escenario1.Basico.{Estacion, Localizacion, Paquete}
 import escenario1.App.system
 import org.joda.time.DateTime
 import play.api.libs.json.JsValue.jsValueToJsLookup
 import play.api.libs.json._
+import java.util.{Calendar, Date}
 
 //import java.util.NoSuchElementException
 import scala.concurrent.duration._
@@ -73,8 +74,17 @@ class Tren extends Actor with ActorLogging {
         //VÁLIDO PARA VIAJES CON SOLO UNA COORDENADA DE ORIGEN Y OTRA DESTINO (Caso actual)
         //SI LA PETICIÓN ES DE VARIAS COORDENADAS, HAY QUE OBSERVAR LA RESPUESTA DE LA PETICIÓN Y VER QUÉ CAMPO 'DURATION' ES EL DE LA DURACIÓN COMPLETA DEL VIAJE
         val duracionViajeJsValue = (((jsonViaje \ "routes") (0) \ "legs") (0) \ "duration").get
-
         val snow_chance = 0.25
+        val hogar = coordenadasOrigen(0) // Valor de la variable hogar
+        val snow_chance2 = hogar match {
+          case "MADRID" => 0.22
+          case "BARCELONA" => 0.23
+          case "ZARAGOZA" => 0.24
+          case "SEVILLA" => 0.20
+          case "VALENCIA" => 0.21
+          case _ => 0.0
+        }
+        println(s"La probabilidad de nieve en $coordenadasOrigen(0) es: $snow_chance2")// POSIBILIDAD DE VARIAR EL VALOR DE snow_chance DEPENDIENDO DEL VALOR DE coordenadasOrigen(0) -> Si coordenadasOrigen(0) = "MADRID" -> snow_chance= 0.10, Si coordenadasOrigen(0) = "ZARAGOZA" -> snow_chance = 0.2
         val r = new Random()
         // Se definen los grupos de retraso en un map
         val grupos = Map(
@@ -102,7 +112,7 @@ class Tren extends Actor with ActorLogging {
         }
 
         // Al generar un número y haciendo uso del método anterior se asigna el número generado a un grupo de retraso.
-        val retraso = if (r.nextDouble() < snow_chance) {
+        val retraso = if (r.nextDouble() <= snow_chance2) {
           println("Va a nevar")
           val numAleatorio = Random.nextDouble()
           val grupoAsignado = asignarGrupo(numAleatorio)
@@ -116,15 +126,16 @@ class Tren extends Actor with ActorLogging {
             case 4 => println(s"El retraso será de $retraso minutos")
           }
           */
-          producer ! f"""{"tren_id": $tren_id,"event_type": "DELAYED TRAIN","train_origin": "${coordenadasOrigen(0)}", "train_destination": "${coordenadasDestino(0)}"}"""
+          producer ! f"""{"tren_id": $tren_id,"event_type": "DELAYED TRAIN", "delaygroup": $grupoAsignado, "train_origin": "${coordenadasOrigen(0)}", "train_destination": "${coordenadasDestino(0)}"}"""
           retrasoGenerado
         } else {
           println("No va a nevar")
           producer ! f"""{"tren_id": $tren_id,"event_type": "NO DELAYS OCCURRED", "train_origin": "${coordenadasOrigen(0)}", "train_destination": "${coordenadasDestino(0)}"}"""
           0
         }
-
+        val retrasoMillis = retraso * 60 * 1000
         println(s"El retraso será de: $retraso minutos")
+        println(s"El retraso en millis sera de: $retrasoMillis milisegundos")
         println(retraso.getClass)
         //BLOQUE DE DURACIONES REALES
         val duracionViajeReal = s"$duracionViajeJsValue".toDouble
@@ -275,6 +286,7 @@ class Tren extends Actor with ActorLogging {
           if (tiempoLog*i < duracionViaje) {
             context.system.scheduler.scheduleOnce((tiempoLog * (i+1)).milliseconds) {
               val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
+              val dtEventoDelayed = dtI.plus(((dt0 to DateTime.now).millis  * fdv)+ retrasoMillis)
               if (horas == 0) {
                 log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+minutos+" minutos || Posición actual --> Longitud: "+coordenadasViajeTren(indicesCoordenadas(i)).head+", Latitud: "+coordenadasViajeTren(indicesCoordenadas(i))(1))
               } //+"; "+localizacionActual(i))
@@ -286,7 +298,8 @@ class Tren extends Actor with ActorLogging {
                 log.debug(s"    [Tren $tren_id] Tiempo de viaje --> "+horas+" horas, "+minutos+" minutos || Posición actual --> Longitud: "+coordenadasViajeTren(indicesCoordenadas(i)).head+", Latitud: "+coordenadasViajeTren(indicesCoordenadas(i))(1))
                 val dtEvento = dtI.plus((dt0 to DateTime.now).millis * fdv)
               } //+";  "+localizacionActual(i))
-              producer ! f"""{"train_id": $tren_id, "event_type": "TRAIN IN TRAVEL", "date": "$dtEvento","estimated_duration": "$duracionViajeEstMins","real_duration": "$duracionViajeRealMins", "delay": "$retraso", "train_origin": "${coordenadasOrigen(0)}", "train_destination": "${coordenadasDestino(0)}","station_origin": "${coordenadasOrigen(1)}", "station_destination": "${coordenadasDestino(1)}", "coordenadas":[${coordenadasViajeTren(indicesCoordenadas(i)).head},${coordenadasViajeTren(indicesCoordenadas(i))(1)}]}""" }        }}
+              producer ! f"""{"train_id": $tren_id, "event_type": "TRAIN IN TRAVEL", "date": "$dtEvento","delayed_date":"$dtEventoDelayed","estimated_duration": "$duracionViajeEstMins","real_duration": "$duracionViajeRealMins", "delay": "$retraso", "train_origin": "${coordenadasOrigen(0)}", "train_destination": "${coordenadasDestino(0)}","station_origin": "${coordenadasOrigen(1)}", "station_destination": "${coordenadasDestino(1)}", "coordenadas":[${coordenadasViajeTren(indicesCoordenadas(i)).head},${coordenadasViajeTren(indicesCoordenadas(i))(1)}]}""" }        }}
+
         context.system.scheduler.scheduleOnce(duracionViaje.milliseconds) {
           self ! FinViaje
         }
